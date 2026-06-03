@@ -20,6 +20,10 @@ class User(Base):
     group_memberships = relationship("GroupMember", back_populates="user")
     paid_expenses = relationship("SharedExpense", back_populates="payer")
     expense_splits = relationship("ExpenseSplit", back_populates="user")
+    
+    # Recurring Payments
+    recurring_payments = relationship("RecurringPayment", back_populates="user")
+    payment_notifications = relationship("PaymentNotification", back_populates="user")
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -98,6 +102,7 @@ class SharedExpense(Base):
     description = Column(String)
     amount = Column(Float)
     date = Column(Date, default=datetime.date.today)
+    category = Column(String)
 
     group = relationship("ExpenseGroup", back_populates="expenses")
     payer = relationship("User", back_populates="paid_expenses")
@@ -114,3 +119,37 @@ class ExpenseSplit(Base):
 
     expense = relationship("SharedExpense", back_populates="splits")
     user = relationship("User", back_populates="expense_splits")
+
+class RecurringPayment(Base):
+    __tablename__ = "recurring_payments"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String)  # e.g., "Electricity Bill", "Home Loan EMI"
+    amount = Column(Float)
+    category = Column(String)
+    frequency = Column(String)  # daily, weekly, monthly, yearly
+    start_date = Column(Date)
+    next_due_date = Column(Date)
+    is_active = Column(Boolean, default=True)
+    auto_pay = Column(Boolean, default=False)
+    description = Column(String, nullable=True)
+    created_at = Column(Date, default=datetime.date.today)
+    updated_at = Column(Date, default=datetime.date.today, onupdate=datetime.date.today)
+
+    user = relationship("User", back_populates="recurring_payments")
+    notifications = relationship("PaymentNotification", back_populates="recurring_payment", cascade="all, delete-orphan")
+
+class PaymentNotification(Base):
+    __tablename__ = "payment_notifications"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    recurring_payment_id = Column(String, ForeignKey("recurring_payments.id"))
+    due_date = Column(Date)
+    is_read = Column(Boolean, default=False)
+    is_dismissed = Column(Boolean, default=False)
+    created_at = Column(Date, default=datetime.date.today)
+
+    user = relationship("User", back_populates="payment_notifications")
+    recurring_payment = relationship("RecurringPayment", back_populates="notifications")

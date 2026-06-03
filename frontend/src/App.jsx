@@ -12,6 +12,7 @@ import FraudList from './components/FraudList';
 import Modal from './components/Modal';
 import ManualEntry from './components/ManualEntry';
 import SplitBill from './components/SplitBill';
+import RecurringPayments from './components/RecurringPayments';
 
 // Initialize auth header to prevent race conditions with child components
 const savedUser = localStorage.getItem('fintech_user');
@@ -80,6 +81,8 @@ function App() {
                 return <Forecast />;
             case 'split_bill':
                 return <SplitBill />;
+            case 'recurring_payments':
+                return <RecurringPayments />;
             case 'fraud': // New route
                 return <FraudList
                     setActiveTab={setActiveTab}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Receipt, LineChart, TrendingUp, Settings, ChevronLeft, ChevronRight, PieChart, AlertCircle, Users } from 'lucide-react';
+import { LayoutDashboard, Receipt, LineChart, TrendingUp, Settings, ChevronLeft, ChevronRight, PieChart, AlertCircle, Users, Calendar } from 'lucide-react';
 
 const Sidebar = ({ activeTab, setActiveTab, isOpen, toggle }) => {
     const menuItems = [
@@ -7,6 +7,7 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, toggle }) => {
         { id: 'transactions', label: 'Transactions', icon: Receipt },
         { id: 'insights', label: 'Analytics', icon: PieChart },
         { id: 'forecast', label: 'Forecasts', icon: TrendingUp },
+        { id: 'recurring_payments', label: 'Recurring Bills', icon: Calendar },
         { id: 'split_bill', label: 'Split Bill', icon: Users },
         { id: 'fraud', label: 'Fraud Alerts', icon: AlertCircle },
     ];
