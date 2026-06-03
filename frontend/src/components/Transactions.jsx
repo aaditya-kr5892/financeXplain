@@ -17,16 +17,19 @@ const Transactions = () => {
     };
 
     useEffect(() => {
-        // Mock Data loading
-        const mockTxns = Array.from({ length: 10 }).map((_, i) => ({
-            id: i,
-            date: '2023-10-24',
-            description: i % 2 === 0 ? 'Starbucks Coffee' : 'Monthly Rent',
-            amount: i % 2 === 0 ? -5.40 : -1200,
-            category: i % 2 === 0 ? 'Food' : 'Rent'
-        }));
-        setTransactions(mockTxns);
-        setLoading(false);
+        const fetchTransactions = async () => {
+            try {
+                const res = await axios.get('/api/transactions');
+                // The API returns transactions in chronological order (tail), so we might want to reverse to show newest first
+                setTransactions(res.data.reverse());
+            } catch (err) {
+                console.error("Failed to fetch transactions", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchTransactions();
     }, []);
 
     return (
@@ -74,7 +77,7 @@ const Transactions = () => {
                                 </td>
                                 <td className="px-6 py-4 text-slate-400 text-sm">{txn.date}</td>
                                 <td className={`px-6 py-4 text-right font-bold ${txn.amount > 0 ? 'text-green-400' : 'text-slate-200'}`}>
-                                    {txn.amount > 0 ? '+' : ''}{txn.amount}
+                                    ₹{txn.amount > 0 ? '+' : ''}{Math.abs(txn.amount).toFixed(2)}
                                 </td>
                             </tr>
                         ))}

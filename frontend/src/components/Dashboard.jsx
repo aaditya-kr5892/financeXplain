@@ -1,118 +1,119 @@
 import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, Calendar } from 'lucide-react';
 import axios from 'axios';
-import FileUpload from './FileUpload';
+import ManualEntry from './ManualEntry';
+import Budget from './Budget';
 
 const Dashboard = () => {
     const [stats, setStats] = useState({ income: 0, expense: 0, balance: 0 });
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [period, setPeriod] = useState('monthly'); // weekly, monthly, yearly
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch real stats from backend
+                // Fetch real stats
                 const statsRes = await axios.get('/api/stats');
                 setStats(statsRes.data);
 
-                // Fetch transactions and generate chart data
-                const transRes = await axios.get('/api/transactions');
-                const transactions = transRes.data;
+                // Fetch Analytics Data based on period
+                const analyticsRes = await axios.get(`/api/analytics?period=${period}`);
+                setData(analyticsRes.data);
 
-                // Generate monthly chart data from transactions
-                const monthlyData = {};
-                transactions.forEach(t => {
-                    const date = new Date(t.date);
-                    const monthKey = date.toLocaleString('default', { month: 'short' });
-                    if (!monthlyData[monthKey]) {
-                        monthlyData[monthKey] = 0;
-                    }
-                    monthlyData[monthKey] += Math.abs(t.amount);
-                });
-
-                const chartData = Object.entries(monthlyData).map(([name, amount]) => ({
-                    name,
-                    amount: Math.round(amount)
-                }));
-
-                setData(chartData.length > 0 ? chartData : [
-                    { name: 'Jan', amount: 4000 }, { name: 'Feb', amount: 3000 },
-                    { name: 'Mar', amount: 2000 }, { name: 'Apr', amount: 2780 },
-                    { name: 'May', amount: 1890 }, { name: 'Jun', amount: 2390 },
-                ]);
             } catch (err) {
                 console.error("Failed to fetch dashboard data", err);
-                // Fallback to mock data if API fails
-                setStats({ income: 5400, expense: 3200, balance: 2200 });
-                setData([
-                    { name: 'Jan', amount: 4000 }, { name: 'Feb', amount: 3000 },
-                    { name: 'Mar', amount: 2000 }, { name: 'Apr', amount: 2780 },
-                    { name: 'May', amount: 1890 }, { name: 'Jun', amount: 2390 },
-                ]);
+                // Fallback
+                setStats({ income: 0, expense: 0, balance: 0 });
+                setData([]);
             } finally {
                 setLoading(false);
             }
         };
         fetchData();
-    }, [refreshKey]); // Added refreshKey to dependency array
+    }, [refreshKey, period]);
 
     return (
         <div className="space-y-8 animate-in fade-in zoom-in duration-500">
-            {/* Upload Section */}
+            {/* Manual Entry Section - ID kept for 'Add Transaction' button scroll */}
             <div className="mb-8" id="file-upload-section">
-                <FileUpload onUploadSuccess={() => setRefreshKey(k => k + 1)} />
+                <ManualEntry onTransactionAdded={() => setRefreshKey(k => k + 1)} />
             </div>
+
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatCard
                     title="Total Balance"
-                    amount={`$${stats.balance}`}
+                    amount={`₹${stats.balance}`}
                     trend="+12%"
                     isPositive={true}
                     icon={Wallet}
                 />
                 <StatCard
                     title="Monthly Income"
-                    amount={`$${stats.income}`}
+                    amount={`₹${stats.income}`}
                     trend="+5%"
                     isPositive={true}
                     icon={ArrowUpRight}
                 />
                 <StatCard
                     title="Monthly Expenses"
-                    amount={`$${stats.expense}`}
+                    amount={`₹${Math.abs(stats.expense)}`}
                     trend="-2%"
-                    isPositive={false} // actually good if expenses are down, but red usually means 'expense'
-                    // logic: if expenses down, good. let's assume trend is 'increase in expense' = bad
+                    isPositive={false}
                     color="red"
                     icon={ArrowDownRight}
                 />
             </div>
 
-            {/* Main Chart */}
-            <div className="bg-slate-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10 shadow-xl">
-                <h3 className="text-xl font-semibold mb-6">Cash Flow Analytics</h3>
-                <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={data}>
-                            <defs>
-                                <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                            <XAxis dataKey="name" stroke="#94a3b8" />
-                            <YAxis stroke="#94a3b8" />
-                            <Tooltip
-                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
-                                itemStyle={{ color: '#fff' }}
-                            />
-                            <Area type="monotone" dataKey="amount" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAmt)" />
-                        </AreaChart>
-                    </ResponsiveContainer>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Main Chart (Span 2 cols) */}
+                <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10 shadow-xl">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-semibold">Cash Flow Analytics</h3>
+                        <div className="bg-slate-700/50 p-1 rounded-lg flex space-x-1">
+                            {['weekly', 'monthly', 'yearly'].map((p) => (
+                                <button
+                                    key={p}
+                                    onClick={() => setPeriod(p)}
+                                    className={`px-3 py-1 text-xs font-medium rounded-md capitalize transition-all ${period === p
+                                            ? 'bg-blue-600 text-white shadow-md'
+                                            : 'text-slate-400 hover:text-white'
+                                        }`}
+                                >
+                                    {p}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={data}>
+                                <defs>
+                                    <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                <XAxis dataKey="name" stroke="#94a3b8" />
+                                <YAxis stroke="#94a3b8" />
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
+                                    itemStyle={{ color: '#fff' }}
+                                />
+                                <Area type="monotone" dataKey="amount" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAmt)" />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Budget Component (Span 1 col) */}
+                <div className="lg:col-span-1">
+                    <Budget />
                 </div>
             </div>
         </div>
