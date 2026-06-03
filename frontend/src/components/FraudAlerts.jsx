@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { AlertTriangle, ShieldAlert, CheckCircle } from 'lucide-react';
 
-const FraudAlerts = () => {
+const FraudAlerts = ({ setActiveTab }) => {
     const [anomalies, setAnomalies] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -56,7 +56,10 @@ const FraudAlerts = () => {
                 ))}
             </div>
 
-            <button className="w-full mt-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold rounded transition-colors border border-rose-500/20">
+            <button
+                onClick={() => setActiveTab('fraud')}
+                className="w-full mt-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold rounded transition-colors border border-rose-500/20"
+            >
                 Review All Alerts
             </button>
         </div>

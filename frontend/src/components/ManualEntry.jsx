@@ -7,7 +7,8 @@ const ManualEntry = ({ onTransactionAdded }) => {
         date: new Date().toISOString().split('T')[0], // Default to today
         description: '',
         amount: '',
-        category: ''
+        category: '',
+        type: 'debit' // Default to debit
     });
     const [submitting, setSubmitting] = useState(false);
     const [status, setStatus] = useState(null); // 'success' | 'error'
@@ -39,6 +40,10 @@ const ManualEntry = ({ onTransactionAdded }) => {
         }
     };
 
+    const handleTypeChange = (type) => {
+        setFormData(prev => ({ ...prev, type }));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -60,10 +65,14 @@ const ManualEntry = ({ onTransactionAdded }) => {
         setMessage('');
 
         try {
+            // Apply sign based on type
+            const rawAmount = Math.abs(parseFloat(formData.amount));
+            const finalAmount = formData.type === 'debit' ? -rawAmount : rawAmount;
+
             const transactionData = {
                 date: formData.date,
                 description: formData.description,
-                amount: parseFloat(formData.amount),
+                amount: finalAmount,
                 category: formData.category === 'Auto-categorize' ? null : formData.category || null
             };
 
@@ -77,7 +86,8 @@ const ManualEntry = ({ onTransactionAdded }) => {
                 date: new Date().toISOString().split('T')[0],
                 description: '',
                 amount: '',
-                category: ''
+                category: '',
+                type: 'debit'
             });
 
             // Notify parent component
@@ -100,6 +110,30 @@ const ManualEntry = ({ onTransactionAdded }) => {
             </h3>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Type Toggle */}
+                <div className="flex bg-corporate-bg border border-corporate-border rounded-md p-1">
+                    <button
+                        type="button"
+                        onClick={() => handleTypeChange('credit')}
+                        className={`flex-1 py-1.5 text-xs font-semibold rounded transition-all ${formData.type === 'credit'
+                                ? 'bg-emerald-500/20 text-emerald-400 shadow-sm'
+                                : 'text-corporate-text-secondary hover:text-corporate-text-main'
+                            }`}
+                    >
+                        Income (+)
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleTypeChange('debit')}
+                        className={`flex-1 py-1.5 text-xs font-semibold rounded transition-all ${formData.type === 'debit'
+                                ? 'bg-rose-500/20 text-rose-400 shadow-sm'
+                                : 'text-corporate-text-secondary hover:text-corporate-text-main'
+                            }`}
+                    >
+                        Expense (-)
+                    </button>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                     {/* Date Input */}
                     <div>
@@ -122,7 +156,10 @@ const ManualEntry = ({ onTransactionAdded }) => {
                             Amount
                         </label>
                         <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-corporate-text-secondary font-bold text-xs">₹</span>
+                            <span className={`absolute left-3 top-1/2 -translate-y-1/2 font-bold text-xs ${formData.type === 'credit' ? 'text-emerald-400' : 'text-rose-400'
+                                }`}>
+                                {formData.type === 'credit' ? '+₹' : '-₹'}
+                            </span>
                             <input
                                 type="number"
                                 name="amount"
@@ -130,7 +167,9 @@ const ManualEntry = ({ onTransactionAdded }) => {
                                 onChange={handleChange}
                                 placeholder="0.00"
                                 required
-                                className="w-full pl-6 pr-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary"
+                                min="0" // Prevent typing negative numbers directly
+                                step="0.01"
+                                className="w-full pl-8 pr-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary"
                             />
                         </div>
                     </div>

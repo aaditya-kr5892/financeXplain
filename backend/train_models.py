@@ -73,14 +73,18 @@ def train_anomaly_model(df):
     
     # 3. Category Encoding
     df_features['category_code'] = df_features['category'].astype('category').cat.codes
+
+    # 4. Round Number Detection (New from Strategy Guide)
+    # Fraudsters often use round numbers.
+    df_features['is_round'] = (df_features['amount'] % 100 == 0).astype(int)
     
     # Select Features for Model
-    features = ['amount', 'amount_zscore', 'is_weekend', 'category_code']
+    features = ['amount', 'amount_zscore', 'is_weekend', 'category_code', 'is_round']
     X = df_features[features].fillna(0) # Handle NaN
     
     # Train Isolation Forest
-    # contamination=0.05 implies we expect ~5% of data to be anomalous
-    model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    # contamination=0.01 implies we expect ~1% of data to be anomalous (stricter)
+    model = IsolationForest(n_estimators=100, contamination=0.01, random_state=42)
     model.fit(X)
     
     # Save Model AND Column transformer info (if needed, but simple manual FE here)

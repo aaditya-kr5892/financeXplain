@@ -7,10 +7,20 @@ import Transactions from './components/Transactions';
 import Insights from './components/Insights';
 import Login from './components/Login';
 import Forecast from './components/Forecast';
+import Preloader from './components/Preloader';
+import FraudList from './components/FraudList';
+
+// Initialize auth header to prevent race conditions with child components
+const savedUser = localStorage.getItem('fintech_user');
+if (savedUser) {
+    axios.defaults.headers.common['X-User-ID'] = savedUser;
+}
 
 function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [user, setUser] = useState(localStorage.getItem('fintech_user'));
+    const [appLoading, setAppLoading] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     useEffect(() => {
         if (user) {
@@ -34,13 +44,15 @@ function App() {
     const renderContent = () => {
         switch (activeTab) {
             case 'dashboard':
-                return <Dashboard />;
+                return <Dashboard setActiveTab={setActiveTab} />;
             case 'transactions':
                 return <Transactions />;
             case 'insights':
                 return <Insights />;
             case 'forecast':
                 return <Forecast />;
+            case 'fraud': // New route
+                return <FraudList setActiveTab={setActiveTab} />;
             default:
                 return <Dashboard />;
         }
@@ -48,9 +60,10 @@ function App() {
 
     return (
         <div className="flex min-h-screen bg-corporate-bg text-corporate-text-main overflow-hidden font-sans selection:bg-corporate-primary selection:text-white">
-            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+            <Preloader setLoading={setAppLoading} />
+            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} toggle={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-            <main className="flex-1 ml-64 p-8 overflow-y-auto h-screen relative scroll-smooth bg-corporate-bg">
+            <main className={`flex-1 ${isSidebarOpen ? 'ml-64' : 'ml-20'} p-8 overflow-y-auto h-screen relative scroll-smooth bg-corporate-bg transition-all duration-300 ease-in-out`}>
                 {/* Modern Background Gradient - Subtle */}
                 <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0 overflow-hidden">
                     <div className="absolute top-[0%] right-[0%] w-[600px] h-[600px] bg-corporate-primary/5 rounded-full blur-[120px]" />

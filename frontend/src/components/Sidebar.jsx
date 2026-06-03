@@ -1,7 +1,7 @@
 import React from 'react';
-import { LayoutDashboard, Receipt, LineChart, TrendingUp, Settings, SlidersHorizontal, PieChart } from 'lucide-react';
+import { LayoutDashboard, Receipt, LineChart, TrendingUp, Settings, ChevronLeft, ChevronRight, PieChart } from 'lucide-react';
 
-const Sidebar = ({ activeTab, setActiveTab }) => {
+const Sidebar = ({ activeTab, setActiveTab, isOpen, toggle }) => {
     const menuItems = [
         { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
         { id: 'transactions', label: 'Transactions', icon: Receipt },
@@ -10,15 +10,21 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
     ];
 
     return (
-        <div className="w-64 bg-corporate-card border-r border-corporate-border flex flex-col h-screen fixed left-0 top-0 z-50">
+        <div className={`${isOpen ? 'w-64' : 'w-20'} bg-corporate-card border-r border-corporate-border flex flex-col h-screen fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out`}>
             {/* Logo Area */}
-            <div className="h-16 flex items-center px-6 border-b border-corporate-border">
-                <div className="flex items-center gap-2 text-corporate-text-main font-bold text-xl tracking-tight">
-                    <div className="w-8 h-8 bg-corporate-primary/20 rounded-md flex items-center justify-center text-corporate-primary">
+            <div className="h-16 flex items-center justify-between px-4 border-b border-corporate-border">
+                <div className={`flex items-center gap-2 text-corporate-text-main font-bold text-xl tracking-tight ${!isOpen && 'justify-center w-full'}`}>
+                    <div className="w-8 h-8 bg-corporate-primary/20 rounded-md flex items-center justify-center text-corporate-primary shrink-0">
                         <LineChart size={20} />
                     </div>
-                    FinSight
+                    {isOpen && <span className="animate-in fade-in duration-200">FinSight</span>}
                 </div>
+                {/* Toggle Button (Only visible when open, or maybe move it to bottom if closed? Let's keep it here but separate logic) */}
+                {isOpen && (
+                    <button onClick={toggle} className="text-corporate-text-secondary hover:text-white transition-colors">
+                        <ChevronLeft size={18} />
+                    </button>
+                )}
             </div>
 
             {/* Navigation */}
@@ -27,22 +33,28 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                     <button
                         key={item.id}
                         onClick={() => setActiveTab(item.id)}
-                        className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-md transition-all duration-200 text-sm font-medium ${activeTab === item.id
+                        className={`w-full flex items-center ${isOpen ? 'space-x-3 px-3' : 'justify-center px-0'} py-2.5 rounded-md transition-all duration-200 text-sm font-medium ${activeTab === item.id
                             ? 'bg-corporate-primary/10 text-corporate-primary border-l-2 border-corporate-primary'
                             : 'text-corporate-text-secondary hover:bg-white/5 hover:text-corporate-text-main'
                             }`}
+                        title={!isOpen ? item.label : ''}
                     >
-                        <item.icon size={18} className={activeTab === item.id ? "text-corporate-primary" : "text-corporate-text-secondary group-hover:text-corporate-text-main"} />
-                        <span>{item.label}</span>
+                        <item.icon size={20} className={activeTab === item.id ? "text-corporate-primary" : "text-corporate-text-secondary group-hover:text-corporate-text-main"} />
+                        {isOpen && <span className="animate-in fade-in duration-200">{item.label}</span>}
                     </button>
                 ))}
             </nav>
 
             {/* Footer / Settings */}
-            <div className="p-4 border-t border-corporate-border">
-                <button className="w-full flex items-center space-x-3 px-3 py-2 text-corporate-text-secondary hover:text-white transition-colors text-sm font-medium">
-                    <Settings size={18} />
-                    <span>Configuration</span>
+            <div className="p-4 border-t border-corporate-border flex flex-col items-center">
+                {!isOpen && (
+                    <button onClick={toggle} className="mb-4 text-corporate-text-secondary hover:text-white transition-colors">
+                        <ChevronRight size={20} />
+                    </button>
+                )}
+                <button className={`w-full flex items-center ${isOpen ? 'space-x-3 px-3' : 'justify-center'} py-2 text-corporate-text-secondary hover:text-white transition-colors text-sm font-medium`}>
+                    <Settings size={20} />
+                    {isOpen && <span>Configuration</span>}
                 </button>
             </div>
         </div>

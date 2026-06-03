@@ -9,6 +9,7 @@ import csv
 from datetime import datetime
 from typing import List, Optional
 from llm_service import generate_financial_advice
+import uuid
 
 app = FastAPI(title="Fintech Dashboard API")
 
@@ -74,6 +75,26 @@ def user_exists(username: str) -> bool:
         return False
     return False
 
+    return False
+
+def ensure_transaction_schema(user_file):
+    if not os.path.exists(user_file):
+        return
+
+    df = pd.read_csv(user_file)
+    modified = False
+    
+    if 'id' not in df.columns:
+        df['id'] = [str(uuid.uuid4()) for _ in range(len(df))]
+        modified = True
+        
+    if 'is_resolved' not in df.columns:
+        df['is_resolved'] = False
+        modified = True
+        
+    if modified:
+        df.to_csv(user_file, index=False)
+
 @app.post("/api/register")
 def register(user: UserRegister):
     if user_exists(user.username):
@@ -89,10 +110,12 @@ def register(user: UserRegister):
     
     # Create transactions file with initial balance
     initial_txn = {
+        'id': str(uuid.uuid4()),
         'date': datetime.now().strftime('%Y-%m-%d'),
         'description': 'Initial Balance Deposit',
         'amount': user.initial_balance,
-        'category': 'Income'
+        'category': 'Income',
+        'is_resolved': False
     }
     df = pd.DataFrame([initial_txn])
     df.to_csv(trans_file, index=False)
@@ -504,7 +527,16 @@ def fraud_check(user: str = Depends(get_current_user)):
         if not os.path.exists(file_path):
              return []
         
+        ensure_transaction_schema(file_path)
         df = pd.read_csv(file_path)
+        
+        # Filter out resolved transactions
+        if 'is_resolved' in df.columns:
+             df = df[df['is_resolved'] != True] # Handle both boolean True and string "True" just in case, or just bool if consistent
+             # Better: ensure bool type
+             # df['is_resolved'] = df['is_resolved'].fillna(False).astype(bool)
+             # df = df[~df['is_resolved']]
+        
         if df.empty or 'anomaly' not in models:
             return []
             
@@ -524,7 +556,10 @@ def fraud_check(user: str = Depends(get_current_user)):
         # Note: In prod, we'd load a LabelEncoder. Here we use pandas codes assuming consistency or re-training often.
         df_features['category_code'] = df_features['category'].astype('category').cat.codes
         
-        features = ['amount', 'amount_zscore', 'is_weekend', 'category_code']
+        # 4. Round Number (New Strategy)
+        df_features['is_round'] = (df_features['amount'] % 100 == 0).astype(int)
+        
+        features = ['amount', 'amount_zscore', 'is_weekend', 'category_code', 'is_round']
         X = df_features[features].fillna(0)
         
         # Predict
@@ -534,9 +569,84 @@ def fraud_check(user: str = Depends(get_current_user)):
         # Filter suspicious
         suspicious = df[df['is_anomaly'] == -1].copy()
         
-        return suspicious.to_dict(orient='records')
+        # KEY FIX: Filter out credits (Income). Only debits (negative amounts) should be flagged as risk.
+        suspicious = suspicious[suspicious['amount'] < 0]
+
+        # KEY FIX 2: Ignore small amounts to reduce noise (e.g. 50rs transactions)
+        # Even if it's statistically weird (e.g. weekend), it's not worth alerting.
+        suspicious = suspicious[suspicious['amount'].abs() > 500]
+        
+        # Generate Reasons (Explainability Layer)
+        def get_reasons(row):
+            reasons = []
+            
+            # Z-Score Logic for Debits (Negative Amounts)
+            # Mean = -500. Val = -5000 (High exp) -> Z = (-5000 - -500)/std = Negative Z
+            # Mean = -500. Val = -50 (Low exp) -> Z = (-50 - -500)/std = Positive Z
+            
+            if row['amount_zscore'] < -3:
+                reasons.append(f"Unusually High Amount (Z-Score: {row['amount_zscore']:.1f})")
+            elif row['amount_zscore'] > 3:
+                reasons.append(f"Unusually Low Amount (Z-Score: {row['amount_zscore']:.1f})")
+                
+            if abs(row['amount']) > 1000 and row['amount'] % 100 == 0:
+                reasons.append("Suspicious Round Amount")
+            
+            if row['is_weekend'] == 1:
+                reasons.append("Unusual Weekend Activity")
+                
+            if not reasons:
+                reasons.append("Pattern Anomaly (ML Detected)")
+            return reasons
+
+        # We need to join the zscore/round back to the suspicious df to calculate reasons
+        # But suspicious is a slice of df, so we can just use the indices or merge logic.
+        # Simplest is to map the features back since suspicious is just filtered df.
+        # df_features has the extended columns.
+        suspicious_features = df_features.loc[suspicious.index]
+        
+        results = []
+        for idx, row in suspicious.iterrows():
+            feat_row = suspicious_features.loc[idx]
+            reasons = get_reasons(feat_row)
+            txn_dict = row.to_dict()
+            txn_dict['reasons'] = reasons
+            # Also format description to be helpful
+            txn_dict['risk_score'] = "High" if len(reasons) > 1 else "Medium"
+            results.append(txn_dict)
+        
+        return results
     except Exception as e:
         print(f"Fraud check error: {e}")
+        return []
+
+class ResolveRequest(BaseModel):
+    transaction_id: str
+
+@app.post("/api/resolve-fraud")
+def resolve_fraud(request: ResolveRequest, user: str = Depends(get_current_user)):
+    try:
+        file_path = get_user_path(user, 'transactions')
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Transactions file not found")
+        
+        ensure_transaction_schema(file_path)
+        df = pd.read_csv(file_path)
+        
+        if 'id' not in df.columns:
+             raise HTTPException(status_code=500, detail="Transaction schema invalid")
+        
+        # Find and update
+        if request.transaction_id in df['id'].values:
+            df.loc[df['id'] == request.transaction_id, 'is_resolved'] = True
+            df.to_csv(file_path, index=False)
+            return {"status": "success", "message": "Transaction marked as resolved"}
+        else:
+            raise HTTPException(status_code=404, detail="Transaction ID not found")
+            
+    except Exception as e:
+        print(f"Error resolving fraud: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
         return []
 
 # --- Reporting ---
@@ -586,16 +696,38 @@ def generate_pdf_report(user: str = Depends(get_current_user), start_date: str =
         health = get_health_score(user) 
         
         # Fraud check on filtered data
-        # Logic duplicated for brevity, ideally refactor
         fraud = [] 
-        if start_date: # Only re-run fraud check if specific range, otherwise expensive?
-             # For now, just show global fraud or empty to avoid confusion. 
-             # Let's run fraud check on the filtered DF!
-             if 'anomaly' in models and not df.empty:
+        # Always run fraud check on the selected data (filtered or all)
+        if 'anomaly' in models and not df.empty:
+             try:
                  df_features = df.copy()
-                 # ... (Simple check)
-                 anomalies = models['anomaly'].predict(df_features[['amount']])
-                 fraud = df[anomalies == -1].to_dict(orient='records')
+                 # 1. Re-create features needed for model (Simplified for report speed)
+                 # Note: Ideally this code is shared with /api/fraud-check
+                 df_features['category_mean'] = df_features.groupby('category')['amount'].transform('mean')
+                 df_features['category_std'] = df_features.groupby('category')['amount'].transform('std').fillna(1.0)
+                 df_features['amount_zscore'] = (df_features['amount'] - df_features['category_mean']) / df_features['category_std']
+                 
+                 df_features['date'] = pd.to_datetime(df_features['date'])
+                 df_features['is_weekend'] = df_features['date'].dt.dayofweek.isin([5, 6]).astype(int)
+                 df_features['category_code'] = df_features['category'].astype('category').cat.codes
+                 
+                 # 4. Round Number
+                 df_features['is_round'] = (df_features['amount'] % 100 == 0).astype(int)
+
+                 features = ['amount', 'amount_zscore', 'is_weekend', 'category_code', 'is_round']
+                 X = df_features[features].fillna(0)
+                 
+                 anomalies_pred = models['anomaly'].predict(X)
+                 fraud_df = df[anomalies_pred == -1]
+                 # Filter out credits here too
+                 fraud_df = fraud_df[fraud_df['amount'] < 0]
+                 # Filter small amounts
+                 fraud_df = fraud_df[fraud_df['amount'].abs() > 500]
+                 
+                 fraud = fraud_df.to_dict(orient='records')
+             except Exception as ex:
+                 print(f"Report fraud check failed: {ex}")
+                 fraud = []
 
         forecast = get_forecast(days=30, user=user) # Forecast is always future
         

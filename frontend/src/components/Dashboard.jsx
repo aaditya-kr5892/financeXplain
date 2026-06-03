@@ -8,7 +8,7 @@ import FinancialHealth from './FinancialHealth';
 import ImpactSimulator from './ImpactSimulator';
 import FraudAlerts from './FraudAlerts';
 
-const Dashboard = () => {
+const Dashboard = ({ setActiveTab }) => {
     const [stats, setStats] = useState({ income: 0, expense: 0, balance: 0 });
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -119,6 +119,11 @@ const Dashboard = () => {
 
                 {/* Column 2 & 3: Main Visuals (Center Stage) */}
                 <div className="lg:col-span-2 space-y-6">
+                    {/* Fraud Alerts (Central Priority) */}
+                    <div className="w-full">
+                        <FraudAlerts setActiveTab={setActiveTab} />
+                    </div>
+
                     {/* Main Chart */}
                     <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm min-h-[400px]">
                         <div className="flex justify-between items-center mb-6">
@@ -168,10 +173,7 @@ const Dashboard = () => {
                         </div>
                     </div>
 
-                    {/* Secondary Metrics / Budget */}
-                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm">
-                        <Budget />
-                    </div>
+
                 </div>
 
                 {/* Column 4: Insights & Health (Right Sidebar) */}
@@ -180,14 +182,9 @@ const Dashboard = () => {
                         <FinancialHealth />
                     </div>
 
-                    {/* Fraud / Security Alerts */}
-                    <div className="mb-6">
-                        <FraudAlerts />
-                    </div>
-
-                    {/* Fraud / Security Alerts */}
-                    <div className="mb-6">
-                        <FraudAlerts />
+                    {/* Budget moved here for symmetry */}
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm">
+                        <Budget />
                     </div>
 
                     {/* Report Center & AI Insights */}
@@ -196,8 +193,7 @@ const Dashboard = () => {
                             <Sparkles className="text-corporate-accent" size={18} />
                             <h4 className="text-sm font-bold text-corporate-text-main uppercase tracking-wider">Smart Insights & Reports</h4>
                         </div>
-
-                        {/* AI Summary */}
+                        {/* ... content remains ... */}
                         <p className="text-corporate-text-secondary text-sm leading-relaxed mb-6 border-l-2 border-corporate-primary pl-3 italic">
                             {Math.abs(stats.expense) > stats.income * 0.5
                                 ? "Spend Alert: Expenses exceed 50% of income ratio. Recommended action: Audit discretionary categories."
