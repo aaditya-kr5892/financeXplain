@@ -508,12 +508,30 @@ def fraud_check(user: str = Depends(get_current_user)):
         if df.empty or 'anomaly' not in models:
             return []
             
-        # Detect Anomalies
-        # -1 is anomaly, 1 is normal
-        anomalies = models['anomaly'].predict(df[['amount']])
+        # Replicate Feature Engineering for Inference
+        df_features = df.copy()
+        
+        # 1. Z-Score (using current batch stats - ideally should use trained scaler, but batch approximation works for simple demo)
+        df_features['category_mean'] = df_features.groupby('category')['amount'].transform('mean')
+        df_features['category_std'] = df_features.groupby('category')['amount'].transform('std').fillna(1.0)
+        df_features['amount_zscore'] = (df_features['amount'] - df_features['category_mean']) / df_features['category_std']
+        
+        # 2. Weekend
+        df_features['date'] = pd.to_datetime(df_features['date'])
+        df_features['is_weekend'] = df_features['date'].dt.dayofweek.isin([5, 6]).astype(int)
+        
+        # 3. Encoding
+        # Note: In prod, we'd load a LabelEncoder. Here we use pandas codes assuming consistency or re-training often.
+        df_features['category_code'] = df_features['category'].astype('category').cat.codes
+        
+        features = ['amount', 'amount_zscore', 'is_weekend', 'category_code']
+        X = df_features[features].fillna(0)
+        
+        # Predict
+        anomalies = models['anomaly'].predict(X)
         df['is_anomaly'] = anomalies
         
-        # Filter suspicious transactions
+        # Filter suspicious
         suspicious = df[df['is_anomaly'] == -1].copy()
         
         return suspicious.to_dict(orient='records')
@@ -522,6 +540,121 @@ def fraud_check(user: str = Depends(get_current_user)):
         return []
 
 # --- Reporting ---
+from reports import create_pdf_report, create_statement_pdf
+from fastapi.responses import FileResponse
+from datetime import datetime, timedelta
+
+def filter_df_by_date(df, start_str: str = None, end_str: str = None):
+    if not start_str and not end_str:
+        return df
+        
+    df['date_dt'] = pd.to_datetime(df['date'])
+    filtered = df.copy()
+    
+    if start_str:
+        start = pd.to_datetime(start_str)
+        filtered = filtered[filtered['date_dt'] >= start]
+    if end_str:
+        end = pd.to_datetime(end_str)
+        filtered = filtered[filtered['date_dt'] <= end]
+        
+    return filtered.drop(columns=['date_dt'])
+
+@app.get("/api/report/pdf")
+def generate_pdf_report(user: str = Depends(get_current_user), start_date: str = None, end_date: str = None):
+    try:
+        # Gather Data
+        file_path = get_user_path(user, 'transactions')
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=400, detail="No data")
+        
+        full_df = pd.read_csv(file_path)
+        
+        # Filter Data
+        df = filter_df_by_date(full_df, start_date, end_date)
+        
+        if df.empty:
+             raise HTTPException(status_code=400, detail="No transactions in this period")
+        
+        # Re-calc stats based on filtered data
+        total_income = df[df['amount'] > 0]['amount'].sum()
+        total_expense = df[df['amount'] < 0]['amount'].sum()
+        balance = total_income + total_expense
+        stats = {"income": total_income, "expense": total_expense, "balance": balance}
+        
+        # Health score (mock recal or use global) - Let's use global for simplicity but updated balance
+        health = get_health_score(user) 
+        
+        # Fraud check on filtered data
+        # Logic duplicated for brevity, ideally refactor
+        fraud = [] 
+        if start_date: # Only re-run fraud check if specific range, otherwise expensive?
+             # For now, just show global fraud or empty to avoid confusion. 
+             # Let's run fraud check on the filtered DF!
+             if 'anomaly' in models and not df.empty:
+                 df_features = df.copy()
+                 # ... (Simple check)
+                 anomalies = models['anomaly'].predict(df_features[['amount']])
+                 fraud = df[anomalies == -1].to_dict(orient='records')
+
+        forecast = get_forecast(days=30, user=user) # Forecast is always future
+        
+        # Get Top Category
+        top_category = "None"
+        cat_spend = df[df['amount'] < 0].groupby('category')['amount'].sum().abs()
+        if not cat_spend.empty:
+            top_category = f"{cat_spend.idxmax()} (Rs. {cat_spend.max():.2f})"
+
+        # Generate LLM Summary with Date Context
+        period_text = f"Period: {start_date or 'All'} to {end_date or 'Now'}"
+        context = (
+            f"{period_text}\n"
+            f"Net Change: Rs. {balance:.2f}\n"
+            f"Income: Rs. {total_income:.2f}\n"
+            f"Expense: Rs. {abs(total_expense):.2f}\n"
+        )
+        advice = generate_financial_advice("Generate a professional report summary for this period.", context)
+        
+        # Create PDF
+        pdf = create_pdf_report(user, stats, health, fraud, top_category, forecast, advice, df)
+        
+        # Save temp
+        report_path = f"data/{user}_report.pdf"
+        pdf.output(report_path)
+        
+        return FileResponse(report_path, media_type='application/pdf', filename=f'Report_{start_date or "All"}.pdf')
+        
+    except Exception as e:
+        print(f"PDF Gen error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/statement/pdf")
+def generate_statement_pdf(user: str = Depends(get_current_user), start_date: str = None, end_date: str = None):
+    try:
+        file_path = get_user_path(user, 'transactions')
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=400, detail="No data")
+        
+        full_df = pd.read_csv(file_path)
+        df = filter_df_by_date(full_df, start_date, end_date)
+        
+        if df.empty:
+             raise HTTPException(status_code=400, detail="No transactions in this period")
+             
+        # Sort by date
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.sort_values('date', ascending=False)
+        
+        pdf = create_statement_pdf(user, df, start_date or "Start", end_date or "Now")
+        
+        path = f"data/{user}_statement.pdf"
+        pdf.output(path)
+        
+        return FileResponse(path, media_type='application/pdf', filename=f'Statement_{start_date or "All"}.pdf')
+        
+    except Exception as e:
+        print(f"Statement Gen error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/report")
 def generate_report(user: str = Depends(get_current_user)):

@@ -33,6 +33,37 @@ const Dashboard = () => {
         fetchData();
     }, [refreshKey, period]);
 
+    const handleReportDownload = async (type) => {
+        const range = document.getElementById('report-range').value;
+        let query = "";
+
+        if (range !== 'all') {
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - parseInt(range));
+
+            const formatDate = (d) => d.toISOString().split('T')[0];
+            query = `?start_date=${formatDate(start)}&end_date=${formatDate(end)}`;
+        }
+
+        const endpoint = type === 'analysis' ? '/api/report/pdf' : '/api/statement/pdf';
+        const filename = type === 'analysis' ? 'Financial_Analysis.pdf' : 'Transaction_Statement.pdf';
+
+        try {
+            const res = await axios.get(`${endpoint}${query}`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (e) {
+            console.error("Download failed", e);
+            alert("Could not generate document. Please check data availability for this period.");
+        }
+    };
+
     return (
         <div className="bg-corporate-bg min-h-full font-sans text-corporate-text-main p-6 animate-in fade-in zoom-in duration-300">
 
@@ -154,37 +185,57 @@ const Dashboard = () => {
                         <FraudAlerts />
                     </div>
 
-                    {/* AI Insight Tile */}
-                    <div className="bg-gradient-to-b from-corporate-card to-corporate-bg border border-corporate-border rounded-lg p-5 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Sparkles size={60} />
+                    {/* Fraud / Security Alerts */}
+                    <div className="mb-6">
+                        <FraudAlerts />
+                    </div>
+
+                    {/* Report Center & AI Insights */}
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm relative overflow-hidden group">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Sparkles className="text-corporate-accent" size={18} />
+                            <h4 className="text-sm font-bold text-corporate-text-main uppercase tracking-wider">Smart Insights & Reports</h4>
                         </div>
-                        <h4 className="text-sm font-bold text-corporate-accent uppercase tracking-widest mb-3">AI Analysis</h4>
-                        <p className="text-corporate-text-main text-sm leading-relaxed mb-4">
+
+                        {/* AI Summary */}
+                        <p className="text-corporate-text-secondary text-sm leading-relaxed mb-6 border-l-2 border-corporate-primary pl-3 italic">
                             {Math.abs(stats.expense) > stats.income * 0.5
                                 ? "Spend Alert: Expenses exceed 50% of income ratio. Recommended action: Audit discretionary categories."
                                 : "Healthy Status: Savings trajectory aligns with Q3 targets. Revenue streams acting as primary buffer."}
                         </p>
-                        <button
-                            onClick={async () => {
-                                try {
-                                    const res = await axios.get('/api/report');
-                                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
-                                    const downloadAnchorNode = document.createElement('a');
-                                    downloadAnchorNode.setAttribute("href", dataStr);
-                                    downloadAnchorNode.setAttribute("download", "financial_report.json");
-                                    document.body.appendChild(downloadAnchorNode);
-                                    downloadAnchorNode.click();
-                                    downloadAnchorNode.remove();
-                                } catch (e) {
-                                    console.error("Report generation failed", e);
-                                }
-                            }}
-                            className="bg-corporate-primary/10 hover:bg-corporate-primary/20 text-xs text-corporate-primary hover:text-white px-3 py-2 rounded transition-all border border-corporate-primary/20 flex items-center gap-2"
-                        >
-                            <ArrowDownRight size={14} />
-                            Download Full Report
-                        </button>
+
+                        {/* Report Controls */}
+                        <div className="bg-corporate-bg/50 rounded-lg p-4 border border-corporate-border">
+                            <div className="flex justify-between items-center mb-4">
+                                <label className="text-xs text-corporate-text-muted font-medium">Time Period:</label>
+                                <select
+                                    id="report-range"
+                                    className="bg-corporate-card border border-corporate-border text-xs text-corporate-text-main rounded px-2 py-1 outline-none focus:border-corporate-primary"
+                                >
+                                    <option value="30">Last 30 Days</option>
+                                    <option value="180">Last 6 Months</option>
+                                    <option value="365">Last 1 Year</option>
+                                    <option value="all">All Time</option>
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={() => handleReportDownload('analysis')}
+                                    className="flex flex-col items-center justify-center p-3 rounded bg-corporate-primary/10 hover:bg-corporate-primary/20 border border-corporate-primary/20 transition-all group/btn"
+                                >
+                                    <ArrowDownRight size={16} className="text-corporate-primary mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
+                                    <span className="text-[10px] font-semibold text-corporate-primary">Analysis Report</span>
+                                </button>
+                                <button
+                                    onClick={() => handleReportDownload('statement')}
+                                    className="flex flex-col items-center justify-center p-3 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all group/btn"
+                                >
+                                    <Wallet size={16} className="text-emerald-500 mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
+                                    <span className="text-[10px] font-semibold text-emerald-500">Bank Statement</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

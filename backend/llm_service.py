@@ -53,51 +53,68 @@ INSTRUCTIONS:
                     {"role": "system", "content": "You are a helpful financial assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7,
+                temperature=0.3,
             )
             return completion.choices[0].message.content
         except Exception as e:
             print(f"Model {model} failed: {e}")
             continue # Try next model
 
-    # 2. Local Fallback (Essential if API is down)
-    print("CRITICAL: All APIs failed. Engaging Local Rule Engine.")
+    # 2. Local Rule-Based Engine (Robust Fallback)
+    print("API unavailable. Using Local Financial Expert Engine.")
     
-    # Try to extract data from financial_data if available
-    balance = "your current balance"
-    food_spending = "Food expenses"
+    # Defaults
+    balance = 0.0
+    income = 0.0
+    expense = 0.0
     
-    if financial_data:
-        # Extract balance if present
-        if "Current Balance:" in financial_data:
-            balance_line = [line for line in financial_data.split('\n') if 'Current Balance:' in line]
-            if balance_line:
-                balance = balance_line[0].split(':')[1].strip()
+    # 3. Parse Context Data
+    try:
+        lines = financial_data.split('\n')
+        for line in lines:
+            # Normalize currency symbol
+            clean_line = line.replace('Rs.', '₹')
+            
+            if "Current Balance:" in clean_line:
+                balance = float(clean_line.split('₹')[1].strip())
+            if "Total Income:" in clean_line:
+                income = float(clean_line.split('₹')[1].strip())
+            if "Total Expenses:" in clean_line:
+                expense = float(clean_line.split('₹')[1].strip())
+    except:
+        pass # Keep defaults
         
-        # Extract food spending if present
-        if "Food" in financial_data or "food" in financial_data:
-            food_lines = [line for line in financial_data.split('\n') if 'Food' in line or 'food' in line]
-            if food_lines:
-                food_spending = food_lines[0].strip()
-    
-    # A simple Rule-Based "AI" for the demo
     q = user_question.lower()
     
-    if "balance" in q:
-        return f"Based on your data, {balance}. (Offline Mode)"
-        
-    if "vacation" in q or "trip" in q:
-        return f"Based on {balance}, you should review your upcoming expenses. Ensure you cover essential bills first! (Offline Mode)"
-        
-    if "food" in q or "eating" in q or "restaurant" in q:
-        return f"To save on food expenses, try: 1) Meal prep on weekends, 2) Cook at home 4-5 days/week, 3) Set a weekly food budget. These strategies can save you 30-40% on food costs. (Offline Mode)"
-        
-    if "save" in q or "invest" in q:
-         return f"Based on your financial data, consider: 1) Setting up automatic transfers to savings, 2) Reducing variable expenses, 3) Exploring high-yield savings accounts. (Offline Mode)"
-         
-    return (
-        "Based on your recent transaction history (Offline Analysis):\n"
-        "1. Review your spending patterns to identify savings opportunities.\n"
-        "2. Consider setting budget limits for variable expense categories.\n"
-        "3. Monitor your balance regularly to stay on track."
-    )
+    # 4. Generate Specific Advice
+    advice = []
+    
+    # General Assessment
+    if income > 0:
+        savings_ratio = (income - abs(expense)) / income
+        if savings_ratio < 0.2:
+            advice.append(f"Your savings rate is only {savings_ratio*100:.1f}%, which is below the recommended 20%.")
+            advice.append("Try to limit discretionary spending on dining and entertainment.")
+        elif savings_ratio > 0.4:
+            advice.append(f"Great job! You're saving {savings_ratio*100:.1f}% of your income. Consider investing the surplus.")
+    
+    # Specific Topics
+    if "food" in q or "eat" in q:
+        advice.append("Food is often the biggest variable expense. Cooking at home 3 days a week can save you ~Rs. 4000/month.")
+    elif "travel" in q or "vacation" in q:
+        if balance > 20000:
+            advice.append(f"With a balance of Rs. {balance:.0f}, you have some room for a short trip, but keep it budget-friendly.")
+        else:
+            advice.append(f"Your current balance (Rs. {balance:.0f}) is tight. I'd recommend delaying major travel plans until you have more liquidity.")
+    elif "invest" in q:
+        advice.append("Consider starting with low-risk index funds or a recurring deposit for safe growth.")
+    
+    # Fallback General Advice if no specific triggers
+    if not advice:
+        if balance < 5000:
+            advice.append(f"Your balance is low (Rs. {balance:.0f}). Focus on essential bills and avoid new debt.")
+        else:
+            advice.append(f"You are in a stable position with Rs. {balance:.0f}. Review your subscription costs to optimize further.")
+            
+    header = "Based on your financial data (Local Analysis): "
+    return header + " ".join(advice)

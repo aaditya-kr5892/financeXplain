@@ -56,23 +56,47 @@ def train_forecasting_model(df):
     print("Forecasting Model Saved.")
 
 def train_anomaly_model(df):
-    print("Training Anomaly Detection Model...")
-    # Detect anomalies based on Amount
-    X = df[['amount']]
+    print("Training Robust Anomaly Detection Model...")
     
-    model = IsolationForest(contamination=0.05, random_state=42)
+    # --- Feature Engineering for Fraud Detection ---
+    df_features = df.copy()
+    
+    # 1. Amount Z-Score per Category (Detect outliers within their own context)
+    # e.g., A $500 food bill is suspicious, but $500 rent is normal.
+    df_features['category_mean'] = df_features.groupby('category')['amount'].transform('mean')
+    df_features['category_std'] = df_features.groupby('category')['amount'].transform('std').fillna(1.0) # Avoid div/0
+    df_features['amount_zscore'] = (df_features['amount'] - df_features['category_mean']) / df_features['category_std']
+    
+    # 2. Weekend Flag (Unusual business spending on weekends?)
+    df_features['date'] = pd.to_datetime(df_features['date'])
+    df_features['is_weekend'] = df_features['date'].dt.dayofweek.isin([5, 6]).astype(int)
+    
+    # 3. Category Encoding
+    df_features['category_code'] = df_features['category'].astype('category').cat.codes
+    
+    # Select Features for Model
+    features = ['amount', 'amount_zscore', 'is_weekend', 'category_code']
+    X = df_features[features].fillna(0) # Handle NaN
+    
+    # Train Isolation Forest
+    # contamination=0.05 implies we expect ~5% of data to be anomalous
+    model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
     model.fit(X)
     
+    # Save Model AND Column transformer info (if needed, but simple manual FE here)
     with open('models/anomaly.pkl', 'wb') as f:
         pickle.dump(model, f)
-    print("Anomaly Model Saved.")
+        
+    print("Robust Anomaly Model Saved.")
 
 def main():
-    if not os.path.exists('data/transactions.csv'):
-        print("Data file not found!")
+    # Use the specific user file for the hackathon demo
+    data_file = 'data/Bihari Boy_transactions.csv'
+    if not os.path.exists(data_file):
+        print(f"{data_file} not found!")
         return
         
-    df = pd.read_csv('data/transactions.csv')
+    df = pd.read_csv(data_file)
     
     os.makedirs('models', exist_ok=True)
     
