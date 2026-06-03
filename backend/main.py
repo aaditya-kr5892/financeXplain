@@ -1026,9 +1026,15 @@ def simulate_transaction(req: SimulationRequest, user: User = Depends(get_curren
         # Calculate new balance
         new_balance = current_balance - abs(req.amount)
         
-        # Check Budget
         budget_alert = "Safe"
-        
+
+        # 1. Check Solvency (Critical)
+        if new_balance < 0:
+            budget_alert = "Critical: Insufficient Funds"
+        elif new_balance < current_balance * 0.2:
+            budget_alert = "Warning: Low Balance Risk"
+            
+        # 2. Check Budget (If Exists)
         budget = db.query(Budget).filter(Budget.user_id == user.id, Budget.category == req.category).first()
         if budget:
              limit = budget.amount
@@ -1054,6 +1060,10 @@ def simulate_transaction(req: SimulationRequest, user: User = Depends(get_curren
                  budget_alert = "Critical: Exceeds Budget"
              elif spent + abs(req.amount) > limit * 0.9:
                  budget_alert = "Warning: Near Budget Limit"
+        
+        # 3. No Budget Fallback
+        elif budget_alert == "Safe" and abs(req.amount) > current_balance * 0.3:
+             budget_alert = "Warning: Significant Expense (30%+ of Balance)"
         
         return {
             "current_balance": current_balance,

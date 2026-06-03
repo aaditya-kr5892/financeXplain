@@ -11,13 +11,22 @@ const ImpactSimulator = () => {
     const categories = ['Food', 'Utilities', 'Rent', 'Entertainment', 'Shopping', 'Healthcare', 'Transportation', 'Education', 'Other'];
 
     const handleSimulate = async () => {
-        if (!amount || parseFloat(amount) <= 0) return;
+        console.log("DEBUG: handleSimulate clicked. Amount:", amount, "Category:", category);
+
+        const parsedAmount = parseFloat(amount);
+        if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+            console.log("DEBUG: Validation failed. Parsed:", parsedAmount);
+            return;
+        }
+
         setLoading(true);
         try {
+            console.log("DEBUG: Sending request...");
             const res = await axios.post('/api/simulate', {
-                amount: parseFloat(amount),
+                amount: parsedAmount,
                 category
             });
+            console.log("DEBUG: Result:", res.data);
             setResult(res.data);
         } catch (err) {
             console.error("Simulation failed", err);
@@ -39,7 +48,10 @@ const ImpactSimulator = () => {
                     <input
                         type="number"
                         value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                        onChange={(e) => {
+                            setAmount(e.target.value);
+                            setResult(null);
+                        }}
                         className="w-full bg-corporate-bg border border-corporate-border rounded px-3 py-2 text-corporate-text-main focus:outline-none focus:border-corporate-primary transition-colors text-sm"
                         placeholder="e.g. 5000"
                     />
@@ -48,7 +60,10 @@ const ImpactSimulator = () => {
                     <label className="block text-xs text-corporate-text-secondary mb-1">On Category</label>
                     <select
                         value={category}
-                        onChange={(e) => setCategory(e.target.value)}
+                        onChange={(e) => {
+                            setCategory(e.target.value);
+                            setResult(null);
+                        }}
                         className="w-full bg-corporate-bg border border-corporate-border rounded px-3 py-2 text-corporate-text-main focus:outline-none focus:border-corporate-primary transition-colors text-sm"
                     >
                         {categories.map(c => <option key={c} value={c}>{c}</option>)}
