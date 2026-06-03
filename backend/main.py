@@ -1,15 +1,20 @@
-from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import FastAPI, HTTPException, Header, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
 import pickle
 import os
 import hashlib
-import csv
 from datetime import datetime
 from typing import List, Optional
 from llm_service import generate_financial_advice
 import uuid
+from sqlalchemy.orm import Session
+from database import get_db, engine, Base
+from models import User, Transaction, Budget
+
+# Create Tables (if not exist)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Fintech Dashboard API")
 
@@ -23,17 +28,6 @@ app.add_middleware(
 )
 
 # --- USER MANAGEMENT ---
-USERS_FILE = 'data/users.csv'
-DATA_DIR = 'data'
-
-if not os.path.exists(DATA_DIR):
-    os.makedirs(DATA_DIR)
-
-# Ensure users file exists
-if not os.path.exists(USERS_FILE):
-    with open(USERS_FILE, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['username', 'password_hash'])
 
 class UserAuth(BaseModel):
     username: str
@@ -45,170 +39,128 @@ class UserRegister(UserAuth):
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
-def get_user_path(username: str, file_type: str) -> str:
-    # file_type: 'transactions' or 'budgets'
-    if file_type == 'transactions':
-        return os.path.join(DATA_DIR, f"{username}_transactions.csv")
-    elif file_type == 'budgets':
-        return os.path.join(DATA_DIR, f"{username}_budgets.json")
-    return ""
-
-def verify_user(username: str, password: str) -> bool:
-    try:
-        with open(USERS_FILE, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row['username'] == username:
-                    return row['password_hash'] == hash_password(password)
-    except FileNotFoundError:
-        return False
-    return False
-
-def user_exists(username: str) -> bool:
-    try:
-        with open(USERS_FILE, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row['username'] == username:
-                    return True
-    except FileNotFoundError:
-        return False
-    return False
-
-    return False
-
-def ensure_transaction_schema(user_file):
-    if not os.path.exists(user_file):
-        return
-
-    df = pd.read_csv(user_file)
-    modified = False
-    
-    if 'id' not in df.columns:
-        df['id'] = [str(uuid.uuid4()) for _ in range(len(df))]
-        modified = True
-        
-    if 'is_resolved' not in df.columns:
-        df['is_resolved'] = False
-        modified = True
-        
-    if modified:
-        df.to_csv(user_file, index=False)
+def verify_password(plain_password, hashed_password):
+    return hash_password(plain_password) == hashed_password
 
 @app.post("/api/register")
-def register(user: UserRegister):
-    if user_exists(user.username):
+def register(user: UserRegister, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if db_user:
         raise HTTPException(status_code=400, detail="Username already exists")
     
-    # Save user
-    with open(USERS_FILE, 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([user.username, hash_password(user.password)])
+    # Create User
+    new_user = User(
+        username=user.username,
+        password_hash=hash_password(user.password)
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
     
-    # Initialize User Data
-    trans_file = get_user_path(user.username, 'transactions')
-    
-    # Create transactions file with initial balance
-    initial_txn = {
-        'id': str(uuid.uuid4()),
-        'date': datetime.now().strftime('%Y-%m-%d'),
-        'description': 'Initial Balance Deposit',
-        'amount': user.initial_balance,
-        'category': 'Income',
-        'is_resolved': False
-    }
-    df = pd.DataFrame([initial_txn])
-    df.to_csv(trans_file, index=False)
+    # Initial Balance Transaction
+    initial_txn = Transaction(
+        id=str(uuid.uuid4()),
+        user_id=new_user.id,
+        date=datetime.now().date(),
+        description='Initial Balance Deposit',
+        amount=user.initial_balance,
+        category='Income',
+        is_resolved=False
+    )
+    db.add(initial_txn)
+    db.commit()
     
     return {"status": "success", "message": "User registered successfully"}
 
 @app.post("/api/login")
-def login(user: UserAuth):
-    if verify_user(user.username, user.password):
-        return {"status": "success", "token": user.username} # Simple token mechanism
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+def login(user: UserAuth, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if not db_user or not verify_password(user.password, db_user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"status": "success", "token": user.username}
 
-# Dependency to get current user from header
-async def get_current_user(x_user_id: Optional[str] = Header(None)):
+async def get_current_user_obj(x_user_id: Optional[str] = Header(None), db: Session = Depends(get_db)):
     if not x_user_id:
         raise HTTPException(status_code=401, detail="X-User-ID header missing")
-    return x_user_id
-
-# --- MODELS ---
-# Load Models (Lazy loading)
-models = {}
-
-def load_models():
-    try:
-        # Load from local 'models' folder
-        if os.path.exists('models/classifier.pkl'):
-            with open('models/classifier.pkl', 'rb') as f:
-                models['classifier'] = pickle.load(f)
-        if os.path.exists('models/forecaster.pkl'):
-            with open('models/forecaster.pkl', 'rb') as f:
-                models['forecaster'] = pickle.load(f)
-        if os.path.exists('models/anomaly.pkl'):
-            with open('models/anomaly.pkl', 'rb') as f:
-                models['anomaly'] = pickle.load(f)
-        print("Models loaded successfully.")
-    except Exception as e:
-        print(f"Error loading models: {e}")
-
-@app.on_event("startup")
-async def startup_event():
-    load_models()
+    
+    user = db.query(User).filter(User.username == x_user_id).first()
+    if not user:
+         raise HTTPException(status_code=401, detail="User not found")
+    return user
 
 # --- DATA ENDPOINTS ---
 
+# Dependency to get current user object
+async def get_current_user(x_user_id: Optional[str] = Header(None), db: Session = Depends(get_db)):
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="X-User-ID header missing")
+    
+    user = db.query(User).filter(User.username == x_user_id).first()
+    if not user:
+         raise HTTPException(status_code=401, detail="User not found")
+    return user
+
 @app.get("/api/transactions")
-def get_transactions(user: str = Depends(get_current_user)):
-    try:
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
-             return []
-        
-        df = pd.read_csv(file_path)
-        # Return last 100 transactions for UI
-        return df.tail(100).to_dict(orient='records')
-    except Exception as e:
-        print(f"Error fetching transactions for {user}: {e}")
-        return []
+def get_transactions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    transactions = db.query(Transaction).filter(Transaction.user_id == user.id).all()
+    # Convert to dict list
+    return [
+        {
+            "id": t.id,
+            "date": t.date,
+            "description": t.description,
+            "amount": t.amount,
+            "category": t.category,
+            "is_resolved": t.is_resolved
+        }
+        for t in transactions
+    ][-100:] # Return last 100
 
 @app.get("/api/stats")
-def get_stats(user: str = Depends(get_current_user)):
-    try:
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
-             return {"income": 0, "expense": 0, "balance": 0}
-
-        df = pd.read_csv(file_path)
-        if df.empty:
-             return {"income": 0, "expense": 0, "balance": 0}
-
-        total_income = df[df['category'] == 'Income']['amount'].sum()
-        total_expense = df[df['category'] != 'Income']['amount'].sum()
-        balance = total_income + total_expense
-        return {
-            "income": round(total_income, 2),
-            "expense": round(total_expense, 2),
-            "balance": round(balance, 2)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def get_stats(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Use SQL aggregation for efficiency
+    # But for simplicity/speed now, fetch all and sum (or use query funcs)
+    # transactions = db.query(Transaction).filter(Transaction.user_id == user.id).all()
+    # Pushing sum to DB is better:
+    
+    from sqlalchemy import func
+    
+    total_income = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id == user.id, 
+        Transaction.category == 'Income'
+    ).scalar() or 0.0
+    
+    # Expense is non-Income
+    total_expense = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id == user.id, 
+        Transaction.category != 'Income'
+    ).scalar() or 0.0
+    
+    balance = total_income + total_expense
+    
+    return {
+        "income": round(total_income, 2),
+        "expense": round(total_expense, 2),
+        "balance": round(balance, 2)
+    }
 
 class AdviceRequest(BaseModel):
     context: str
 
 @app.post("/api/ask-advisor")
-def ask_advisor(request: AdviceRequest, user: str = Depends(get_current_user)):
+def ask_advisor(request: AdviceRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=400, detail="No data found for user")
-
-        # Read actual transaction data
-        df = pd.read_csv(file_path)
+        # Fetch operations from DB
+        # We need a DataFrame for the logic below
+        query = db.query(Transaction).filter(Transaction.user_id == user.id)
+        df = pd.read_sql(query.statement, db.bind)
         
+        if df.empty:
+            raise HTTPException(status_code=400, detail="No data found for user")
+            
+        # Ensure date is datetime
+        df['date'] = pd.to_datetime(df['date'])
+
         # Calculate real statistics
         total_income = df[df['amount'] > 0]['amount'].sum()
         total_expense = df[df['amount'] < 0]['amount'].sum()
@@ -243,18 +195,15 @@ RECENT TRANSACTIONS (Last 10):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/forecast")
-def get_forecast(days: int = 30, user: str = Depends(get_current_user)):
+def get_forecast(days: int = 30, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        # 1. Check for Model and Data
-        if 'forecaster' not in models:
-            # Fallback to simple linear projection if model missing
-            return generate_fallback_forecast(user, days)
-            
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
-             return generate_fallback_forecast(user, days) # Fallback
+        # 1. Fetch Data
+        query = db.query(Transaction).filter(Transaction.user_id == user.id)
+        df = pd.read_sql(query.statement, db.bind)
         
-        df = pd.read_csv(file_path)
+        if df.empty:
+             return generate_fallback_forecast(user, days, db) # Update fallback too
+        
         df['date'] = pd.to_datetime(df['date'])
         
         # 2. Prepare Data for ML
@@ -321,22 +270,28 @@ def get_forecast(days: int = 30, user: str = Depends(get_current_user)):
             
         return forecast_data
 
+        return forecast_data
+
     except Exception as e:
         print(f"Forecast ML error: {e}")
         # Final safety fallback
-        return generate_fallback_forecast(user, days)
+        return generate_fallback_forecast(user, days, db)
 
-def generate_fallback_forecast(user, days):
+def generate_fallback_forecast(user, days, db):
     """Simple linear projection when ML fails"""
     try:
-        file_path = get_user_path(user, 'transactions')
-        if os.path.exists(file_path):
-            df = pd.read_csv(file_path)
-            total_income = df[df['category'] == 'Income']['amount'].sum()
-            total_expense = df[df['category'] != 'Income']['amount'].sum()
-            current_balance = total_income + total_expense
-        else:
-            current_balance = 0
+        from sqlalchemy import func
+        total_income = db.query(func.sum(Transaction.amount)).filter(
+            Transaction.user_id == user.id, 
+            Transaction.category == 'Income'
+        ).scalar() or 0.0
+        
+        total_expense = db.query(func.sum(Transaction.amount)).filter(
+            Transaction.user_id == user.id, 
+            Transaction.category != 'Income'
+        ).scalar() or 0.0
+            
+        current_balance = total_income + total_expense
             
         return [
             {
@@ -347,7 +302,8 @@ def generate_fallback_forecast(user, days):
             }
             for i in range(days)
         ]
-    except:
+    except Exception as e:
+        print(f"Fallback error: {e}")
         return []
 
 # --- Manual Transaction Entry ---
@@ -358,11 +314,11 @@ class TransactionEntry(BaseModel):
     category: Optional[str] = None
 
 @app.post("/api/transaction")
-def add_transaction(transaction: TransactionEntry, user: str = Depends(get_current_user)):
+def add_transaction(transaction: TransactionEntry, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         # Validate date format
         try:
-            transaction_date = pd.to_datetime(transaction.date, format='%Y-%m-%d')
+            transaction_date = datetime.strptime(transaction.date, '%Y-%m-%d').date()
         except:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
         
@@ -386,32 +342,30 @@ def add_transaction(transaction: TransactionEntry, user: str = Depends(get_curre
             category = 'Uncategorized'
         
         # Create new transaction
-        new_transaction = {
-            'date': transaction_date.strftime('%Y-%m-%d'),
-            'description': transaction.description.strip(),
-            'amount': transaction.amount,
-            'category': category
-        }
+        new_transaction = Transaction(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            date=transaction_date,
+            description=transaction.description.strip(),
+            amount=transaction.amount,
+            category=category,
+            is_resolved=False
+        )
         
-        file_path = get_user_path(user, 'transactions')
-        
-        # Read existing transactions
-        try:
-            df = pd.read_csv(file_path)
-        except FileNotFoundError:
-            # Create new dataframe if file doesn't exist
-            df = pd.DataFrame(columns=['date', 'description', 'amount', 'category'])
-        
-        # Append new transaction
-        df = pd.concat([df, pd.DataFrame([new_transaction])], ignore_index=True)
-        
-        # Save back to CSV
-        df.to_csv(file_path, index=False)
+        db.add(new_transaction)
+        db.commit()
+        db.refresh(new_transaction)
         
         return {
             "status": "success",
             "message": "Transaction added successfully",
-            "transaction": new_transaction
+            "transaction": {
+                "id": new_transaction.id,
+                "date": new_transaction.date,
+                "description": new_transaction.description,
+                "amount": new_transaction.amount,
+                "category": new_transaction.category
+            }
         }
         
     except HTTPException:
@@ -422,98 +376,92 @@ def add_transaction(transaction: TransactionEntry, user: str = Depends(get_curre
 
 # --- Budget Management ---
 
+# --- Budget Management ---
+
 class BudgetUpdate(BaseModel):
     category: str
     amount: float
 
 @app.get("/api/budget")
-def get_budgets(user: str = Depends(get_current_user)):
-    file_path = get_user_path(user, 'budgets')
-    if os.path.exists(file_path):
-        try:
-            with open(file_path, 'r') as f:
-                import json
-                return json.load(f)
-        except:
-            return {}
-    return {}
+def get_budgets(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    budgets = db.query(Budget).filter(Budget.user_id == user.id).all()
+    # Return as dict {category: amount}
+    return {b.category: b.amount for b in budgets}
 
 @app.post("/api/budget")
-def set_budget(budget: BudgetUpdate, user: str = Depends(get_current_user)):
+def set_budget(budget: BudgetUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        file_path = get_user_path(user, 'budgets')
-        budgets = {}
-        if os.path.exists(file_path):
-            with open(file_path, 'r') as f:
-                import json
-                try:
-                    budgets = json.load(f)
-                except:
-                    pass
+        # Check if exists
+        db_budget = db.query(Budget).filter(
+            Budget.user_id == user.id, 
+            Budget.category == budget.category
+        ).first()
         
-        budgets[budget.category] = budget.amount
-        
-        with open(file_path, 'w') as f:
-            import json
-            json.dump(budgets, f)
+        if db_budget:
+            db_budget.amount = budget.amount
+        else:
+            new_budget = Budget(
+                user_id=user.id,
+                category=budget.category,
+                amount=budget.amount
+            )
+            db.add(new_budget)
             
-        return {"status": "success", "budgets": budgets}
+        db.commit()
+        
+        # Return all budgets
+        all_budgets = db.query(Budget).filter(Budget.user_id == user.id).all()
+        return {"status": "success", "budgets": {b.category: b.amount for b in all_budgets}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- Analytics ---
 @app.get("/api/analytics")
-def get_analytics(period: str = 'monthly', user: str = Depends(get_current_user)):
+def get_analytics(period: str = 'monthly', user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
+        # Fetch expenses
+        query = db.query(Transaction).filter(
+            Transaction.user_id == user.id,
+            Transaction.amount < 0
+        )
+        df_exp = pd.read_sql(query.statement, db.bind)
+        
+        if df_exp.empty:
              return []
 
-        df = pd.read_csv(file_path)
-        # Ensure date is datetime
-        df['date'] = pd.to_datetime(df['date'])
-        
-        # Filter only expenses (amount < 0)
-        df_exp = df[df['amount'] < 0].copy()
+        df_exp['date'] = pd.to_datetime(df_exp['date'])
         df_exp['amount'] = df_exp['amount'].abs()
         
         aggregated_data = {}
         
         if period == 'weekly':
-            # Resample by Week 'W'
-            # We need to set date as index
             df_exp.set_index('date', inplace=True)
             weekly = df_exp['amount'].resample('W').sum()
-            # Take last 12 weeks
             weekly = weekly.tail(12)
             for date, amt in weekly.items():
                 aggregated_data[date.strftime('%d %b')] = round(amt, 2)
                 
         elif period == 'yearly':
-            # Resample by Year 'Y'
             df_exp.set_index('date', inplace=True)
             yearly = df_exp['amount'].resample('YE').sum()
-            # Take last 5 years
             yearly = yearly.tail(5)
             for date, amt in yearly.items():
                 aggregated_data[date.strftime('%Y')] = round(amt, 2)
                 
         else: # Default: Monthly
-            # Resample by Month 'M'
             df_exp.set_index('date', inplace=True)
             monthly = df_exp['amount'].resample('ME').sum()
-            # Take last 12 months
             monthly = monthly.tail(12)
             for date, amt in monthly.items():
-                aggregated_data[date.strftime('%b %Y')] = round(amt, 2)
+                # Fix: Handle empty periods if resample creates them
+                if not pd.isna(amt):
+                    aggregated_data[date.strftime('%b %Y')] = round(amt, 2)
         
-        # Convert to list format for Recharts
         result = [{"name": k, "amount": v} for k, v in aggregated_data.items()]
         return result
 
     except Exception as e:
         print(f"Analytics error: {e}")
-        # Return mock if file not found or error
         if period == 'weekly':
             return [{"name": "Week 1", "amount": 200}, {"name": "Week 2", "amount": 350}]
         return []
@@ -521,25 +469,18 @@ def get_analytics(period: str = 'monthly', user: str = Depends(get_current_user)
 # --- Security Features ---
 
 @app.get("/api/fraud-check")
-def fraud_check(user: str = Depends(get_current_user)):
+def fraud_check(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
-             return []
-        
-        ensure_transaction_schema(file_path)
-        df = pd.read_csv(file_path)
-        
-        # Filter out resolved transactions
-        if 'is_resolved' in df.columns:
-             df = df[df['is_resolved'] != True] # Handle both boolean True and string "True" just in case, or just bool if consistent
-             # Better: ensure bool type
-             # df['is_resolved'] = df['is_resolved'].fillna(False).astype(bool)
-             # df = df[~df['is_resolved']]
+        # Fetch Unresolved Transactions
+        query = db.query(Transaction).filter(
+            Transaction.user_id == user.id,
+            Transaction.is_resolved == False
+        )
+        df = pd.read_sql(query.statement, db.bind)
         
         if df.empty or 'anomaly' not in models:
             return []
-            
+
         # Replicate Feature Engineering for Inference
         df_features = df.copy()
         
@@ -620,29 +561,24 @@ def fraud_check(user: str = Depends(get_current_user)):
         print(f"Fraud check error: {e}")
         return []
 
+
 class ResolveRequest(BaseModel):
     transaction_id: str
 
 @app.post("/api/resolve-fraud")
-def resolve_fraud(request: ResolveRequest, user: str = Depends(get_current_user)):
+def resolve_fraud(request: ResolveRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail="Transactions file not found")
+        txn = db.query(Transaction).filter(
+            Transaction.id == request.transaction_id,
+            Transaction.user_id == user.id
+        ).first()
         
-        ensure_transaction_schema(file_path)
-        df = pd.read_csv(file_path)
-        
-        if 'id' not in df.columns:
-             raise HTTPException(status_code=500, detail="Transaction schema invalid")
-        
-        # Find and update
-        if request.transaction_id in df['id'].values:
-            df.loc[df['id'] == request.transaction_id, 'is_resolved'] = True
-            df.to_csv(file_path, index=False)
+        if txn:
+            txn.is_resolved = True
+            db.commit()
             return {"status": "success", "message": "Transaction marked as resolved"}
         else:
-            raise HTTPException(status_code=404, detail="Transaction ID not found")
+            raise HTTPException(status_code=404, detail="Transaction not found")
             
     except Exception as e:
         print(f"Error resolving fraud: {e}")
@@ -671,14 +607,21 @@ def filter_df_by_date(df, start_str: str = None, end_str: str = None):
     return filtered.drop(columns=['date_dt'])
 
 @app.get("/api/report/pdf")
-def generate_pdf_report(user: str = Depends(get_current_user), start_date: str = None, end_date: str = None):
+def generate_pdf_report(
+    user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db),
+    start_date: str = None, 
+    end_date: str = None
+):
     try:
         # Gather Data
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=400, detail="No data")
+        query = db.query(Transaction).filter(Transaction.user_id == user.id)
+        full_df = pd.read_sql(query.statement, db.bind)
         
-        full_df = pd.read_csv(file_path)
+        full_df['date'] = pd.to_datetime(full_df['date'])
+        
+        if full_df.empty:
+            raise HTTPException(status_code=400, detail="No data")
         
         # Filter Data
         df = filter_df_by_date(full_df, start_date, end_date)
@@ -692,26 +635,22 @@ def generate_pdf_report(user: str = Depends(get_current_user), start_date: str =
         balance = total_income + total_expense
         stats = {"income": total_income, "expense": total_expense, "balance": balance}
         
-        # Health score (mock recal or use global) - Let's use global for simplicity but updated balance
-        health = get_health_score(user) 
+        # Health score
+        health = get_health_score_logic(user, db) 
         
         # Fraud check on filtered data
         fraud = [] 
-        # Always run fraud check on the selected data (filtered or all)
         if 'anomaly' in models and not df.empty:
              try:
                  df_features = df.copy()
-                 # 1. Re-create features needed for model (Simplified for report speed)
-                 # Note: Ideally this code is shared with /api/fraud-check
+                 # Feature Engineering
                  df_features['category_mean'] = df_features.groupby('category')['amount'].transform('mean')
                  df_features['category_std'] = df_features.groupby('category')['amount'].transform('std').fillna(1.0)
                  df_features['amount_zscore'] = (df_features['amount'] - df_features['category_mean']) / df_features['category_std']
                  
-                 df_features['date'] = pd.to_datetime(df_features['date'])
                  df_features['is_weekend'] = df_features['date'].dt.dayofweek.isin([5, 6]).astype(int)
                  df_features['category_code'] = df_features['category'].astype('category').cat.codes
                  
-                 # 4. Round Number
                  df_features['is_round'] = (df_features['amount'] % 100 == 0).astype(int)
 
                  features = ['amount', 'amount_zscore', 'is_weekend', 'category_code', 'is_round']
@@ -719,9 +658,7 @@ def generate_pdf_report(user: str = Depends(get_current_user), start_date: str =
                  
                  anomalies_pred = models['anomaly'].predict(X)
                  fraud_df = df[anomalies_pred == -1]
-                 # Filter out credits here too
                  fraud_df = fraud_df[fraud_df['amount'] < 0]
-                 # Filter small amounts
                  fraud_df = fraud_df[fraud_df['amount'].abs() > 500]
                  
                  fraud = fraud_df.to_dict(orient='records')
@@ -729,7 +666,7 @@ def generate_pdf_report(user: str = Depends(get_current_user), start_date: str =
                  print(f"Report fraud check failed: {ex}")
                  fraud = []
 
-        forecast = get_forecast(days=30, user=user) # Forecast is always future
+        forecast = get_forecast(days=30, user=user, db=db) 
         
         # Get Top Category
         top_category = "None"
@@ -744,42 +681,54 @@ def generate_pdf_report(user: str = Depends(get_current_user), start_date: str =
             f"Net Change: Rs. {balance:.2f}\n"
             f"Income: Rs. {total_income:.2f}\n"
             f"Expense: Rs. {abs(total_expense):.2f}\n"
+            f"Top Expense: {top_category}\n"
+            f"Health Score: {health['score']} ({health['status']})\n"
         )
-        advice = generate_financial_advice("Generate a professional report summary for this period.", context)
+        
+        advice_text = generate_financial_advice(user_question="Write an executive summary for this financial report.", financial_data=context)
         
         # Create PDF
-        pdf = create_pdf_report(user, stats, health, fraud, top_category, forecast, advice, df)
+        # Convert Timestamps to str for PDF gen
+        df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+        df = df.sort_values('date', ascending=False)
         
-        # Save temp
-        report_path = f"data/{user}_report.pdf"
-        pdf.output(report_path)
+        pdf = create_pdf_report(user.username, stats, health, fraud, top_category, forecast, advice_text, df)
         
-        return FileResponse(report_path, media_type='application/pdf', filename=f'Report_{start_date or "All"}.pdf')
+        path = f"data/{user.username}_report.pdf"
+        pdf.output(path)
+        
+        return FileResponse(path, media_type='application/pdf', filename=f'Report_{start_date or "All"}.pdf')
         
     except Exception as e:
-        print(f"PDF Gen error: {e}")
+        print(f"Report Gen error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/statement/pdf")
-def generate_statement_pdf(user: str = Depends(get_current_user), start_date: str = None, end_date: str = None):
+@app.get("/api/report/statement")
+def generate_statement_pdf(
+    user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db),
+    start_date: str = None, 
+    end_date: str = None
+):
     try:
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=400, detail="No data")
+        query = db.query(Transaction).filter(Transaction.user_id == user.id)
+        df = pd.read_sql(query.statement, db.bind)
+        df['date'] = pd.to_datetime(df['date'])
         
-        full_df = pd.read_csv(file_path)
-        df = filter_df_by_date(full_df, start_date, end_date)
+        if df.empty:
+            raise HTTPException(status_code=400, detail="No data")
+            
+        df = filter_df_by_date(df, start_date, end_date)
         
         if df.empty:
              raise HTTPException(status_code=400, detail="No transactions in this period")
              
-        # Sort by date
-        df['date'] = pd.to_datetime(df['date'])
         df = df.sort_values('date', ascending=False)
+        df['date'] = df['date'].dt.strftime('%Y-%m-%d')
         
-        pdf = create_statement_pdf(user, df, start_date or "Start", end_date or "Now")
+        pdf = create_statement_pdf(user.username, df, start_date or "Start", end_date or "Now")
         
-        path = f"data/{user}_statement.pdf"
+        path = f"data/{user.username}_statement.pdf"
         pdf.output(path)
         
         return FileResponse(path, media_type='application/pdf', filename=f'Statement_{start_date or "All"}.pdf')
@@ -789,27 +738,27 @@ def generate_statement_pdf(user: str = Depends(get_current_user), start_date: st
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/report")
-def generate_report(user: str = Depends(get_current_user)):
+def generate_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         # Aggregate all data for a comprehensive report
-        stats = get_stats(user)
-        health = get_health_score(user)
-        fraud = fraud_check(user)
-        forecast = get_forecast(days=30, user=user)
+        stats = get_stats(user, db)
+        health = get_health_score_logic(user, db)
+        fraud = fraud_check(user, db)
+        forecast = get_forecast(days=30, user=user, db=db)
         
         # Get Top Spending Category
-        file_path = get_user_path(user, 'transactions')
         top_category = "None"
-        if os.path.exists(file_path):
-            df = pd.read_csv(file_path)
-            if not df.empty:
-                cat_spend = df[df['amount'] < 0].groupby('category')['amount'].sum().abs()
-                if not cat_spend.empty:
-                    top_category = f"{cat_spend.idxmax()} (₹{cat_spend.max():.2f})"
+        query = db.query(Transaction).filter(Transaction.user_id == user.id)
+        df = pd.read_sql(query.statement, db.bind)
+        
+        if not df.empty:
+            cat_spend = df[df['amount'] < 0].groupby('category')['amount'].sum().abs()
+            if not cat_spend.empty:
+                top_category = f"{cat_spend.idxmax()} (Rs. {cat_spend.max():.2f})"
         
         report = {
             "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            "user": user,
+            "user": user.username,
             "financial_summary": stats,
             "health_score": health,
             "security_status": {
@@ -826,53 +775,47 @@ def generate_report(user: str = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- FinanceIQ Features ---
-
-@app.get("/api/health")
-def get_health_score(user: str = Depends(get_current_user)):
+# Logic for Health Score
+def get_health_score_logic(user, db):
     try:
-        file_path = get_user_path(user, 'transactions')
-        if not os.path.exists(file_path):
+        # Fetch transactions
+        transactions = db.query(Transaction).filter(Transaction.user_id == user.id).all()
+        if not transactions:
              return {"score": 0, "status": "New", "savings_rate": 0, "budget_score": 0}
-
-        df = pd.read_csv(file_path)
-        if df.empty:
-             return {"score": 0, "status": "New", "savings_rate": 0, "budget_score": 0}
-
+        
+        df = pd.DataFrame([t.__dict__ for t in transactions])
+        # remove sqlalchemy state
+        if '_sa_instance_state' in df.columns:
+            del df['_sa_instance_state']
+            
         total_income = df[df['category'] == 'Income']['amount'].sum()
-        total_expense = df[df['category'] != 'Income']['amount'].sum()
+        total_expense = df[df['category'] != 'Income']['amount'].sum() # Negative value
         
         if total_income == 0:
             savings_rate = 0
         else:
-            savings_rate = (total_income + total_expense) / total_income # Expense is negative
+            savings_rate = (total_income + total_expense) / total_income
             
-        # 1. Savings Score (50pts) - Target > 20% savings
+        # 1. Savings Score
         savings_score = min(max(savings_rate / 0.20, 0), 1) * 50
         
-        # 2. Budget Adherence (50pts)
-        # Check budgets
+        # 2. Budget Adherence
         budget_score = 50
-        budget_file = get_user_path(user, 'budgets')
-
-        if os.path.exists(budget_file):
-             with open(budget_file, 'r') as f:
-                import json
-                budgets = json.load(f)
-                
-                # Calculate current spending per category
-                current_month_spending = {} 
-                # Let's filter to current month
-                df['date'] = pd.to_datetime(df['date'])
-                current_month = pd.Timestamp.now().month
-                df_curr = df[df['date'].dt.month == current_month]
-                
-                for cat, limit in budgets.items():
-                    spent = df_curr[(df_curr['category'] == cat) & (df_curr['amount'] < 0)]['amount'].sum()
-                    spent = abs(spent)
-                    if spent > limit:
-                        budget_score -= 10 # Deduct 10 pts per violation
-                
+        budgets = db.query(Budget).filter(Budget.user_id == user.id).all()
+        
+        if budgets:
+            category_budgets = {b.category: b.amount for b in budgets}
+            
+            df['date'] = pd.to_datetime(df['date'])
+            current_month = pd.Timestamp.now().month
+            df_curr = df[df['date'].dt.month == current_month]
+            
+            for cat, limit in category_budgets.items():
+                spent = df_curr[(df_curr['category'] == cat) & (df_curr['amount'] < 0)]['amount'].sum()
+                spent = abs(spent)
+                if spent > limit:
+                    budget_score -= 10
+            
         budget_score = max(0, budget_score)
         
         final_score = round(savings_score + budget_score)
@@ -889,46 +832,55 @@ def get_health_score(user: str = Depends(get_current_user)):
             "budget_score": budget_score
         }
     except Exception as e:
-        print(f"Health score error: {e}")
+        print(f"Health logic error: {e}")
         return {"score": 75, "status": "Good", "savings_rate": 15, "budget_score": 40}
+
+@app.get("/api/health")
+def get_health_score(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return get_health_score_logic(user, db)
 
 class SimulationRequest(BaseModel):
     amount: float
     category: str
 
 @app.post("/api/simulate")
-def simulate_transaction(req: SimulationRequest, user: str = Depends(get_current_user)):
+def simulate_transaction(req: SimulationRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         # Get current status
-        stats = get_stats(user)
+        stats = get_stats(user, db)
         current_balance = stats['balance']
         
         # Calculate new balance
-        # Amount sent is usually positive price, so we subtract
         new_balance = current_balance - abs(req.amount)
         
         # Check Budget
         budget_alert = "Safe"
-        budget_file = get_user_path(user, 'budgets')
-
-        if os.path.exists(budget_file):
-            with open(budget_file, 'r') as f:
-                import json
-                budgets = json.load(f)
-                limit = budgets.get(req.category, 0)
-                if limit > 0:
-                     # Get current spent
-                     file_path = get_user_path(user, 'transactions')
-                     df = pd.read_csv(file_path)
-                     df['date'] = pd.to_datetime(df['date'])
-                     current_month = pd.Timestamp.now().month
-                     spent = df[(df['category'] == req.category) & (df['date'].dt.month == current_month) & (df['amount'] < 0)]['amount'].sum()
-                     spent = abs(spent)
-                     
-                     if spent + abs(req.amount) > limit:
-                         budget_alert = "Critical: Exceeds Budget"
-                     elif spent + abs(req.amount) > limit * 0.9:
-                         budget_alert = "Warning: Near Budget Limit"
+        
+        budget = db.query(Budget).filter(Budget.user_id == user.id, Budget.category == req.category).first()
+        if budget:
+             limit = budget.amount
+             # Get current spent
+             from sqlalchemy import func
+             import calendar
+             today = datetime.now()
+             _, last_day = calendar.monthrange(today.year, today.month)
+             start_of_month = datetime(today.year, today.month, 1).date()
+             end_of_month = datetime(today.year, today.month, last_day).date()
+             
+             spent = db.query(func.sum(Transaction.amount)).filter(
+                 Transaction.user_id == user.id,
+                 Transaction.category == req.category,
+                 Transaction.date >= start_of_month,
+                 Transaction.date <= end_of_month,
+                 Transaction.amount < 0
+             ).scalar() or 0.0
+             
+             spent = abs(spent)
+             
+             if spent + abs(req.amount) > limit:
+                 budget_alert = "Critical: Exceeds Budget"
+             elif spent + abs(req.amount) > limit * 0.9:
+                 budget_alert = "Warning: Near Budget Limit"
         
         return {
             "current_balance": current_balance,
@@ -944,7 +896,7 @@ from fastapi import UploadFile, File
 from data_normalizer import normalize_csv
 
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...), user: str = Depends(get_current_user)):
+async def upload_file(file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         content = await file.read()
         
@@ -955,27 +907,36 @@ async def upload_file(file: UploadFile = File(...), user: str = Depends(get_curr
             
         # 2. Enrich (Predict Categories)
         if 'classifier' in models:
-            # We predict categories based on description
-            # Vectorizer is part of the pipeline, so we just pass text
             descriptions = df_new['description'].astype(str)
             predicted_cats = models['classifier'].predict(descriptions)
             df_new['category'] = predicted_cats
         else:
-            df_new['category'] = 'Uncategorized' # Fallback
+            df_new['category'] = 'Uncategorized' 
             
-        # 3. Save / Merge
-        # For Hackathon, we OVERWRITE the current data to show the 'New' user state
-        # In prod, we would append to DB
-        file_path = get_user_path(user, 'transactions')
-        df_new.to_csv(file_path, index=False)
+        # 3. Save to DB
+        added_count = 0
+        for _, row in df_new.iterrows():
+            # Basic dedup based on date/desc/amt check could be added here
+            new_txn = Transaction(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                date=datetime.strptime(row['date'], '%Y-%m-%d').date(),
+                description=row['description'],
+                amount=float(row['amount']),
+                category=row['category'],
+                is_resolved=False
+            )
+            db.add(new_txn)
+            added_count += 1
+        
+        db.commit()
         
         return {
             "status": "success", 
-            "message": f"Processed {len(df_new)} transactions.",
+            "message": f"Processed and saved {added_count} transactions.",
             "preview": df_new.head(5).to_dict(orient='records')
         }
             
     except Exception as e:
         print(f"Upload error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 

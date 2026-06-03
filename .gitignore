@@ -11,5 +11,15 @@ node_modules/
 .env
 
 # OS
-.DS_Store
-Thumbs.db
+
+# Database
+*.db
+*.sqlite3
+
+# Frontend
+dist/
+build/
+coverage/
+
+# Artifacts
+antigravity/

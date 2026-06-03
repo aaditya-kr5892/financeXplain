@@ -116,8 +116,8 @@ const ManualEntry = ({ onTransactionAdded }) => {
                         type="button"
                         onClick={() => handleTypeChange('credit')}
                         className={`flex-1 py-1.5 text-xs font-semibold rounded transition-all ${formData.type === 'credit'
-                                ? 'bg-emerald-500/20 text-emerald-400 shadow-sm'
-                                : 'text-corporate-text-secondary hover:text-corporate-text-main'
+                            ? 'bg-emerald-500/20 text-emerald-400 shadow-sm'
+                            : 'text-corporate-text-secondary hover:text-corporate-text-main'
                             }`}
                     >
                         Income (+)
@@ -126,8 +126,8 @@ const ManualEntry = ({ onTransactionAdded }) => {
                         type="button"
                         onClick={() => handleTypeChange('debit')}
                         className={`flex-1 py-1.5 text-xs font-semibold rounded transition-all ${formData.type === 'debit'
-                                ? 'bg-rose-500/20 text-rose-400 shadow-sm'
-                                : 'text-corporate-text-secondary hover:text-corporate-text-main'
+                            ? 'bg-rose-500/20 text-rose-400 shadow-sm'
+                            : 'text-corporate-text-secondary hover:text-corporate-text-main'
                             }`}
                     >
                         Expense (-)
@@ -135,7 +135,6 @@ const ManualEntry = ({ onTransactionAdded }) => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                    {/* Date Input */}
                     <div>
                         <label className="block text-xs font-medium text-corporate-text-secondary mb-1">
                             Date
@@ -146,7 +145,7 @@ const ManualEntry = ({ onTransactionAdded }) => {
                             value={formData.date}
                             onChange={handleChange}
                             required
-                            className="w-full px-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary"
+                            className="w-full px-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary [&::-webkit-calendar-picker-indicator]:invert"
                         />
                     </div>
 
@@ -169,7 +168,7 @@ const ManualEntry = ({ onTransactionAdded }) => {
                                 required
                                 min="0" // Prevent typing negative numbers directly
                                 step="0.01"
-                                className="w-full pl-8 pr-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary"
+                                className="w-full pl-8 pr-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
                         </div>
                     </div>
