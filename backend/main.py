@@ -90,15 +90,15 @@ def ask_advisor(request: AdviceRequest):
         # Build rich context
         financial_context = f"""
 FINANCIAL DATA SUMMARY:
-- Current Balance: ${balance:.2f}
-- Total Income: ${total_income:.2f}
-- Total Expenses: ${abs(total_expense):.2f}
+- Current Balance: ₹{balance:.2f}
+- Total Income: ₹{total_income:.2f}
+- Total Expenses: ₹{abs(total_expense):.2f}
 
 TOP SPENDING CATEGORIES:
-{chr(10).join([f"- {cat}: ${amt:.2f}" for cat, amt in top_categories.items()])}
+{chr(10).join([f"- {cat}: ₹{amt:.2f}" for cat, amt in top_categories.items()])}
 
 RECENT TRANSACTIONS (Last 10):
-{chr(10).join([f"- {t['date']}: {t['description'][:50]} - ${t['amount']:.2f} ({t['category']})" for t in recent_trans])}
+{chr(10).join([f"- {t['date']}: {t['description'][:50]} - ₹{t['amount']:.2f} ({t['category']})" for t in recent_trans])}
 """
         
         # Pass both context and user question to LLM
@@ -121,6 +121,167 @@ def get_forecast():
         return {"forecast_spending": round(prediction, 2)}
     except Exception as e:
         return {"forecast_spending": 150.00}
+
+# --- Manual Transaction Entry ---
+class TransactionEntry(BaseModel):
+    date: str
+    description: str
+    amount: float
+    category: Optional[str] = None
+
+@app.post("/api/transaction")
+def add_transaction(transaction: TransactionEntry):
+    try:
+        # Validate date format
+        try:
+            transaction_date = pd.to_datetime(transaction.date, format='%Y-%m-%d')
+        except:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+        
+        # Validate amount
+        if transaction.amount == 0:
+            raise HTTPException(status_code=400, detail="Amount cannot be zero")
+        
+        # Validate description
+        if not transaction.description or transaction.description.strip() == "":
+            raise HTTPException(status_code=400, detail="Description is required")
+        
+        # Auto-categorize if category not provided
+        category = transaction.category
+        if not category and 'classifier' in models:
+            try:
+                predicted_cats = models['classifier'].predict([transaction.description])
+                category = predicted_cats[0]
+            except:
+                category = 'Uncategorized'
+        elif not category:
+            category = 'Uncategorized'
+        
+        # Create new transaction
+        new_transaction = {
+            'date': transaction_date.strftime('%Y-%m-%d'),
+            'description': transaction.description.strip(),
+            'amount': transaction.amount,
+            'category': category
+        }
+        
+        # Read existing transactions
+        try:
+            df = pd.read_csv('data/transactions.csv')
+        except FileNotFoundError:
+            # Create new dataframe if file doesn't exist
+            df = pd.DataFrame(columns=['date', 'description', 'amount', 'category'])
+        
+        # Append new transaction
+        df = pd.concat([df, pd.DataFrame([new_transaction])], ignore_index=True)
+        
+        # Save back to CSV
+        df.to_csv('data/transactions.csv', index=False)
+        
+        return {
+            "status": "success",
+            "message": "Transaction added successfully",
+            "transaction": new_transaction
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Transaction entry error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Budget Management ---
+BUDGET_FILE = 'data/budgets.json'
+
+class BudgetUpdate(BaseModel):
+    category: str
+    amount: float
+
+@app.get("/api/budget")
+def get_budgets():
+    if os.path.exists(BUDGET_FILE):
+        try:
+            with open(BUDGET_FILE, 'r') as f:
+                import json
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+@app.post("/api/budget")
+def set_budget(budget: BudgetUpdate):
+    try:
+        budgets = {}
+        if os.path.exists(BUDGET_FILE):
+            with open(BUDGET_FILE, 'r') as f:
+                import json
+                try:
+                    budgets = json.load(f)
+                except:
+                    pass
+        
+        budgets[budget.category] = budget.amount
+        
+        with open(BUDGET_FILE, 'w') as f:
+            import json
+            json.dump(budgets, f)
+            
+        return {"status": "success", "budgets": budgets}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Analytics ---
+@app.get("/api/analytics")
+def get_analytics(period: str = 'monthly'):
+    try:
+        df = pd.read_csv('data/transactions.csv')
+        # Ensure date is datetime
+        df['date'] = pd.to_datetime(df['date'])
+        
+        # Filter only expenses (amount < 0)
+        df_exp = df[df['amount'] < 0].copy()
+        df_exp['amount'] = df_exp['amount'].abs()
+        
+        aggregated_data = {}
+        
+        if period == 'weekly':
+            # Resample by Week 'W'
+            # We need to set date as index
+            df_exp.set_index('date', inplace=True)
+            weekly = df_exp['amount'].resample('W').sum()
+            # Take last 12 weeks
+            weekly = weekly.tail(12)
+            for date, amt in weekly.items():
+                aggregated_data[date.strftime('%d %b')] = round(amt, 2)
+                
+        elif period == 'yearly':
+            # Resample by Year 'Y'
+            df_exp.set_index('date', inplace=True)
+            yearly = df_exp['amount'].resample('YE').sum()
+            # Take last 5 years
+            yearly = yearly.tail(5)
+            for date, amt in yearly.items():
+                aggregated_data[date.strftime('%Y')] = round(amt, 2)
+                
+        else: # Default: Monthly
+            # Resample by Month 'M'
+            df_exp.set_index('date', inplace=True)
+            monthly = df_exp['amount'].resample('ME').sum()
+            # Take last 12 months
+            monthly = monthly.tail(12)
+            for date, amt in monthly.items():
+                aggregated_data[date.strftime('%b %Y')] = round(amt, 2)
+        
+        # Convert to list format for Recharts
+        result = [{"name": k, "amount": v} for k, v in aggregated_data.items()]
+        return result
+
+    except Exception as e:
+        print(f"Analytics error: {e}")
+        # Return mock if file not found or error
+        if period == 'weekly':
+            return [{"name": "Week 1", "amount": 200}, {"name": "Week 2", "amount": 350}]
+        return []
 
 # --- File Upload & Pipeline ---
 from fastapi import UploadFile, File

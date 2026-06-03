@@ -6,124 +6,191 @@ import traceback
 def normalize_csv(file_content: bytes, filename: str = "") -> pd.DataFrame:
     """
     Reads CSV or Excel and maps to: ['date', 'amount', 'description']
+    Handles PNB bank statement format with Withdrawal/Deposit columns.
     """
     try:
         # --- LOADING SECTION ---
         print(f"Loading file: {filename} with size {len(file_content)} bytes")
         
-        try:
-            if filename.endswith('.xlsx') or filename.endswith('.xls'):
-                try:
-                    df = pd.read_excel(io.BytesIO(file_content))
-                    print("Excel read successful.")
-                except ImportError as ie:
-                    print(f"CRITICAL: Missing Excel library. Run 'pip install openpyxl'. Error: {ie}")
-                    raise ie
-            else:
-                df = pd.read_csv(io.BytesIO(file_content))
-        except Exception as e:
-            print(f"Initial load failed (trying CSV fallback): {e}")
+        # Load the file
+        if filename.endswith('.xlsx') or filename.endswith('.xls'):
             try:
-                df = pd.read_csv(io.BytesIO(file_content))
-            except:
-                return pd.DataFrame()
-
-        # --- PNB / Bank Format Handling ---
+                df = pd.read_excel(io.BytesIO(file_content))
+                print("Excel read successful.")
+            except ImportError as ie:
+                print(f"CRITICAL: Missing Excel library. Run 'pip install openpyxl'. Error: {ie}")
+                raise ie
+        else:
+            df = pd.read_csv(io.BytesIO(file_content))
+        
+        print(f"Initial load: {len(df)} rows, {len(df.columns)} columns")
+        
+        # --- FIND HEADER ROW (PNB format has metadata rows before header) ---
         header_row_idx = -1
-        # Defensive check: ensure df is not empty
-        if not df.empty:
-            for i, row in df.head(20).iterrows():
-                # Force convert row values to string safely
-                row_str = [str(val).lower() for val in row.values]
+        
+        for i in range(min(30, len(df))):
+            row_values = [str(val).lower() for val in df.iloc[i].values]
+            
+            # Look for row containing date + (withdrawal OR deposit)
+            has_date = any('date' in val for val in row_values)
+            has_withdrawal = any('withdrawal' in val or 'debit' in val or 'dr' in val for val in row_values)
+            has_deposit = any('deposit' in val or 'credit' in val or 'cr' in val for val in row_values)
+            
+            if has_date and (has_withdrawal or has_deposit):
+                header_row_idx = i
+                print(f"Found header row at index {i}")
+                break
+        
+        # Re-read with correct header
+        if header_row_idx > 0:
+            if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                # First, read the entire file to get the header row values
+                df_temp = pd.read_excel(io.BytesIO(file_content))
                 
-                # Safer checks using str(x) to avoid 'float' errors
-                has_date = any('date' in str(x) for x in row_str)
-                has_amt = any('amount' in str(x) or 'balance' in str(x) or 'withdrawal' in str(x) for x in row_str)
+                # Extract the actual column names from the header row
+                header_values = df_temp.iloc[header_row_idx].values
+                print(f"Header row values: {header_values}")
                 
-                if has_date and has_amt:
-                    header_row_idx = i
+                # Now read the data starting AFTER the header row
+                df = pd.read_excel(io.BytesIO(file_content), skiprows=header_row_idx+1, header=None)
+                
+                # Assign the column names we extracted
+                # Filter out NaN values from header
+                valid_headers = [str(h) if pd.notna(h) else f'col_{i}' for i, h in enumerate(header_values)]
+                df.columns = valid_headers[:len(df.columns)]
+                
+                print(f"Assigned column names: {df.columns.tolist()}")
+            else:
+                df = pd.read_csv(io.BytesIO(file_content), skiprows=header_row_idx)
+                print(f"Re-loaded CSV with skiprows={header_row_idx}")
+        
+        # Normalize column names
+        df.columns = [str(c).lower().strip() for c in df.columns]
+        print(f"Columns after normalization: {df.columns.tolist()}")
+        
+        # --- COLUMN MAPPING ---
+        date_col = None
+        desc_col = None
+        withdrawal_col = None
+        deposit_col = None
+        
+        # Find date column
+        for col in df.columns:
+            if 'date' in col and 'value' not in col:  # Prefer transaction date over value date
+                date_col = col
+                break
+        if not date_col:  # Fallback to any date column
+            for col in df.columns:
+                if 'date' in col:
+                    date_col = col
                     break
         
-        if header_row_idx != -1:
-            if filename.endswith('.xlsx') or filename.endswith('.xls'):
-                df = pd.read_excel(io.BytesIO(file_content), header=header_row_idx+1)
-            else:
-                 new_header = df.iloc[header_row_idx]
-                 df = df[header_row_idx+1:]
-                 df.columns = new_header
-        
-        # Normalize Headers
-        df.columns = [str(c).lower().strip() for c in df.columns]
-        
-        column_map = {}
-        
-        # 1. Date
-        date_keywords = ['transaction date', 'txn date', 'date']
+        # Find description column
         for col in df.columns:
-            if any(k in str(col) for k in date_keywords):
-                column_map[col] = 'date'
+            if any(keyword in col for keyword in ['narration', 'description', 'particular', 'remark', 'detail']):
+                desc_col = col
                 break
-                
-        # 2. Description
-        desc_keywords = ['narration', 'remarks', 'description', 'details']
-        for col in df.columns:
-            if any(k in str(col) for k in desc_keywords):
-                column_map[col] = 'description'
-                break
-
-        # 3. Amount
-        withdrawal_col = next((c for c in df.columns if 'withdrawal' in str(c) or 'debit' in str(c)), None)
-        deposit_col = next((c for c in df.columns if 'deposit' in str(c) or 'credit' in str(c)), None)
         
+        # Find withdrawal column (Dr/Debit)
+        for col in df.columns:
+            # Prioritize columns with 'amount' in the name
+            if 'amount' in col and any(keyword in col for keyword in ['withdrawal', 'debit', 'dr']):
+                withdrawal_col = col
+                print(f"Found withdrawal column: '{col}'")
+                break
+        
+        # Fallback if no amount column found
+        if not withdrawal_col:
+            for col in df.columns:
+                if any(keyword in col for keyword in ['withdrawal', 'debit', 'dr']):
+                    withdrawal_col = col
+                    print(f"Found withdrawal column (fallback): '{col}'")
+                    break
+        
+        # Find deposit column (Cr/Credit)
+        for col in df.columns:
+            # Prioritize columns with 'amount' in the name
+            if 'amount' in col and any(keyword in col for keyword in ['deposit', 'credit', 'cr']):
+                deposit_col = col
+                print(f"Found deposit column: '{col}'")
+                break
+        
+        # Fallback if no amount column found
+        if not deposit_col:
+            for col in df.columns:
+                # Skip description column to avoid false match
+                if col != desc_col and any(keyword in col for keyword in ['deposit', 'credit', 'cr']):
+                    deposit_col = col
+                    print(f"Found deposit column (fallback): '{col}'")
+                    break
+        
+        if not date_col or not desc_col:
+            print(f"ERROR: Missing required columns. date_col={date_col}, desc_col={desc_col}")
+            return pd.DataFrame()
+        
+        # --- CREATE CLEAN DATAFRAME ---
         df_clean = pd.DataFrame()
         
-        # Fallback for Missing Columns
-        user_date_col = next((k for k,v in column_map.items() if v=='date'), None)
-        user_desc_col = next((k for k,v in column_map.items() if v=='description'), None)
-
-        if not user_date_col or not user_desc_col:
-            print(f"Missing columns. Found: {df.columns.tolist()}")
-            # Last ditch effort: Assume col 0 is date, col 1 is desc if nothing found
-            if len(df.columns) >= 2:
-                print("Using default column index 0 and 1 as fallback.")
-                df_clean['date'] = pd.to_datetime(df.iloc[:, 0], errors='coerce')
-                df_clean['description'] = df.iloc[:, 1].fillna('Unknown')
-                # Try to find an amount column by type?
-                # No, just look for one with 'amt'
-                amt_col = next((c for c in df.columns if 'amt' in str(c)), None)
-                if amt_col:
-                     df_clean['amount'] = pd.to_numeric(df[amt_col].astype(str).str.replace(',',''), errors='coerce').fillna(0)
-                else:
-                     df_clean['amount'] = 0.0
-                return df_clean.dropna(subset=['date'])
-            return pd.DataFrame()
-            
-        df_clean['date'] = pd.to_datetime(df[user_date_col], errors='coerce', dayfirst=True)
-        df_clean['description'] = df[user_desc_col].fillna('Unknown')
+        # Parse date
+        df_clean['date'] = pd.to_datetime(df[date_col], errors='coerce', dayfirst=True)
+        
+        # Parse description
+        df_clean['description'] = df[desc_col].fillna('Unknown').astype(str)
+        
+        # --- PARSE AMOUNTS (KEY FIX) ---
+        def parse_amount(value):
+            """Safely parse amount from string, handling commas and NaN"""
+            if pd.isna(value) or value == '' or str(value).strip() in ['nan', '-', '']:
+                return 0.0
+            try:
+                # Remove commas and convert to float
+                return float(str(value).replace(',', '').strip())
+            except:
+                return 0.0
         
         if withdrawal_col and deposit_col:
-            def calc_amount(row):
-                w = str(row[withdrawal_col]).replace(',','')
-                d = str(row[deposit_col]).replace(',','')
-                try: w = float(w) 
-                except: w = 0.0
-                try: d = float(d) 
-                except: d = 0.0
-                
-                if d > 0: return d
-                return -w if w > 0 else 0.0
+            print("Using Withdrawal/Deposit columns for amount calculation")
+            print(f"Withdrawal column name: '{withdrawal_col}'")
+            print(f"Deposit column name: '{deposit_col}'")
             
-            df_clean['amount'] = df.apply(calc_amount, axis=1)
+            # Show raw values before parsing
+            print(f"\nRaw Withdrawal column (first 5):")
+            print(df[withdrawal_col].head().tolist())
+            print(f"\nRaw Deposit column (first 5):")
+            print(df[deposit_col].head().tolist())
+            
+            # Parse withdrawal and deposit columns
+            withdrawals = df[withdrawal_col].apply(parse_amount)
+            deposits = df[deposit_col].apply(parse_amount)
+            
+            # Calculate amount: deposits are positive, withdrawals are negative
+            df_clean['amount'] = deposits - withdrawals
+            
+            print(f"\nAfter parsing:")
+            print(f"  Withdrawals (first 5): {withdrawals.head().tolist()}")
+            print(f"  Deposits (first 5): {deposits.head().tolist()}")
+            print(f"  Final amounts (first 5): {df_clean['amount'].head().tolist()}")
+            
         else:
-             amt_col = next((c for c in df.columns if 'amount' in str(c) or 'txn amt' in str(c)), None)
-             if amt_col:
-                 df_clean['amount'] = df[amt_col].astype(str).str.replace(',','').astype(float)
-             else:
-                 df_clean['amount'] = 0.0
+            # Fallback: look for single amount column
+            print("WARNING: Could not find Withdrawal/Deposit columns, looking for amount column")
+            amt_col = next((c for c in df.columns if 'amount' in c or 'amt' in c), None)
+            if amt_col:
+                df_clean['amount'] = df[amt_col].apply(parse_amount)
+            else:
+                print("ERROR: No amount column found")
+                df_clean['amount'] = 0.0
         
-        # Replace all NaN values with 0 to prevent JSON serialization errors
+        # Remove rows with invalid dates
+        df_clean = df_clean.dropna(subset=['date'])
+        
+        # Replace any remaining NaN with 0
         df_clean = df_clean.fillna(0)
-        return df_clean.dropna(subset=['date'])
+        
+        print(f"Normalization complete: {len(df_clean)} valid transactions")
+        print(f"Amount range: {df_clean['amount'].min()} to {df_clean['amount'].max()}")
+        
+        return df_clean
 
     except Exception as e:
         print(f"Normalization failed: {e}")
