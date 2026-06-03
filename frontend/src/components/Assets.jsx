@@ -100,7 +100,7 @@ const Assets = ({ setSidebarOpen }) => {
                 if (m.currency) currency = m.currency.toUpperCase();
             }
         } catch (e) { }
-        return val.toLocaleString('en-US', {
+        return val.toLocaleString('en-IN', {
             style: 'currency',
             currency: currency,
             maximumFractionDigits: 2
@@ -160,6 +160,19 @@ const Assets = ({ setSidebarOpen }) => {
 
     const pieData = Object.entries(netWorthData.breakdown).map(([name, value]) => ({ name, value }));
 
+    if (loading && assets.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center h-96 animate-in fade-in">
+                <div className="relative w-16 h-16 mb-4">
+                    <div className="absolute inset-0 border-4 border-corporate-border rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-t-corporate-primary rounded-full animate-spin"></div>
+                    <Wallet className="absolute inset-0 m-auto text-corporate-primary animate-pulse" size={24} />
+                </div>
+                <p className="text-corporate-text-secondary font-medium">Loading Wealth Portfolio...</p>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-5 duration-500">
             {/* Header */}
@@ -199,10 +212,7 @@ const Assets = ({ setSidebarOpen }) => {
                         <h3 className="text-3xl font-bold text-corporate-text-main mt-2">
                             ₹{netWorthData.total_net_worth.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                         </h3>
-                        <div className="flex items-center mt-2 text-emerald-400 text-sm font-medium">
-                            <TrendingUp size={14} className="mr-1" />
-                            <span>+12.5% this year</span> {/* Placeholder for now */}
-                        </div>
+
                     </div>
                 </div>
 

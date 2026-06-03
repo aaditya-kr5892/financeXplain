@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8080:8000" # Mapped to 8080 to avoid conflict with local dev
+    volumes:
+      - ./backend:/app:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80" # Mapped to 3000 (standard React dev port, but here it's Nginx)
+      # 80 might require root execution on some Linux, 3000 is safer for testing.
+    depends_on:
+      - backend

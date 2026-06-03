@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertCircle, TrendingUp, DollarSign, Activity, Target, Briefcase } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertCircle, TrendingUp, DollarSign, Activity, Target, Briefcase, Brain } from 'lucide-react';
 import axios from 'axios';
 import Budget from './Budget';
 import FinancialHealth from './FinancialHealth';
-import ImpactSimulator from './ImpactSimulator';
 import FraudAlerts from './FraudAlerts';
+import ConfidenceMeter from './ConfidenceMeter';
 
 const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) => {
     const [stats, setStats] = useState({ income: 0, expense: 0, balance: 0 });
@@ -17,6 +17,7 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
     const [period, setPeriod] = useState('monthly'); // For Chart
     const [overviewPeriod, setOverviewPeriod] = useState('monthly'); // For Cards
     const [downloading, setDownloading] = useState({ analysis: false, statement: false, portfolio: false });
+    const [showConfidenceMeter, setShowConfidenceMeter] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -111,15 +112,15 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
                         title="Balance"
                         amount={stats.balance}
                         icon={Wallet}
-                        trend={12.5}
+                        trend={0} // Balance trend requires history snapshots not yet in API, keeping 0 for now
                         isCurrency
                     />
                     <KPICard
                         title="Credit"
                         amount={stats.credit ? stats.credit[overviewPeriod] : stats.income}
                         icon={DollarSign}
-                        trend={8.2}
-                        isPositive
+                        trend={stats.trends && overviewPeriod !== 'all_time' ? stats.trends[overviewPeriod]?.income : 0}
+                        isPositive={stats.trends && overviewPeriod !== 'all_time' ? stats.trends[overviewPeriod]?.income >= 0 : true}
                         isCurrency
                         valueColor="text-emerald-500"
                     />
@@ -127,8 +128,8 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
                         title="Debit"
                         amount={Math.abs(stats.debit ? stats.debit[overviewPeriod] : stats.expense)}
                         icon={Activity}
-                        trend={-2.4}
-                        isPositive={false}
+                        trend={stats.trends && overviewPeriod !== 'all_time' ? stats.trends[overviewPeriod]?.expense : 0}
+                        isPositive={stats.trends && overviewPeriod !== 'all_time' ? stats.trends[overviewPeriod]?.expense < 0 : false} // Expense down is good
                         isCurrency
                         valueColor="text-rose-500"
                     />
@@ -136,37 +137,48 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
                         title="Savings Rate"
                         amount={`${stats.income ? Math.round(((stats.income - Math.abs(stats.expense)) / stats.income) * 100) : 0}%`}
                         icon={Target}
-                        trend={1.2}
+                        trend={0} // Savings rate trend derived from above, complex to calc in single line, 0 for now
                         isPositive
                     />
                 </div>
             </div>
 
-            {/* Main Content Grid: Bento Box Style */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Main Content Grid: Bento Box Style - Symmetric Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
 
-                {/* Column 1: Health & Simulator (Left Sidebar) */}
-                <div className="lg:col-span-1 space-y-6">
+                {/* Column 1: Health & FinanceIQ (Left Sidebar) */}
+                <div className="lg:col-span-1 flex flex-col gap-6">
                     {/* Financial Health */}
-                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm">
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm flex-1">
                         <FinancialHealth />
                     </div>
 
-                    {/* Simulator */}
-                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm h-fit">
-                        <ImpactSimulator />
+                    {/* FinanceIQ Meter Trigger */}
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm relative overflow-hidden h-[180px] flex flex-col justify-center">
+                        <h3 className="text-sm font-bold text-corporate-text-main flex items-center gap-2 mb-2">
+                            <Brain size={18} className="text-corporate-primary" /> FinanceIQ Meter
+                        </h3>
+                        <p className="text-xs text-corporate-text-secondary mb-4 relative z-10">
+                            Instantly analyze potential purchases with AI.
+                        </p>
+                        <button
+                            onClick={() => setShowConfidenceMeter(true)}
+                            className="w-full py-2.5 bg-corporate-primary hover:bg-purple-600 text-white text-xs font-bold rounded-lg shadow-lg hover:shadow-corporate-primary/20 transition-all flex items-center justify-center gap-2 relative z-10"
+                        >
+                            <Sparkles size={14} /> Should I Buy This?
+                        </button>
                     </div>
                 </div>
 
                 {/* Column 2 & 3: Main Visuals (Center Stage) */}
-                <div className="lg:col-span-2 space-y-6">
-                    {/* Fraud Alerts (Central Priority) */}
+                <div className="lg:col-span-2 flex flex-col gap-6">
+                    {/* Fraud Alerts */}
                     <div className="w-full">
                         <FraudAlerts setActiveTab={setActiveTab} anomalies={fraudData} loading={fraudLoading} />
                     </div>
 
-                    {/* Main Chart */}
-                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm min-h-[400px]">
+                    {/* Main Chart - Adjusted Height to fill space */}
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm flex-1 min-h-[400px]">
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h3 className="text-lg font-semibold text-corporate-text-main">Cash Flow Trends</h3>
@@ -213,93 +225,84 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
                             </ResponsiveContainer>
                         </div>
                     </div>
-
-
                 </div>
 
                 {/* Column 4: Budget & Reports (Right Sidebar) */}
-                <div className="lg:col-span-1 space-y-6">
+                <div className="lg:col-span-1 flex flex-col gap-6">
                     {/* Budget */}
-                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm">
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm flex-1">
                         <Budget />
                     </div>
 
-                    {/* Report Center & AI Insights */}
-                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm relative overflow-hidden group">
-                        <div className="flex items-center gap-2 mb-4">
+                    {/* Report Center */}
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm h-[280px] flex flex-col justify-between relative overflow-hidden group">
+                        <div className="flex items-center gap-2 mb-2">
                             <Sparkles className="text-corporate-accent" size={18} />
-                            <h4 className="text-sm font-bold text-corporate-text-main uppercase tracking-wider">Smart Insights & Reports</h4>
+                            <h4 className="text-sm font-bold text-corporate-text-main uppercase tracking-wider">Smart Insights</h4>
                         </div>
                         {/* ... content remains ... */}
-                        <p className="text-corporate-text-secondary text-sm leading-relaxed mb-6 border-l-2 border-corporate-primary pl-3 italic">
+                        <p className="text-corporate-text-secondary text-xs leading-relaxed mb-4 border-l-2 border-corporate-primary pl-3 italic">
                             {Math.abs(stats.expense) > stats.income * 0.5
-                                ? "Spend Alert: Expenses exceed 50% of income ratio. Recommended action: Audit discretionary categories."
-                                : "Healthy Status: Savings trajectory aligns with Q3 targets. Revenue streams acting as primary buffer."}
+                                ? "Spend Alert: Exp > 50% of Income. Audit discretionary."
+                                : "Healthy: Savings on track."}
                         </p>
 
                         {/* Report Controls */}
-                        <div className="bg-corporate-bg/50 rounded-lg p-4 border border-corporate-border">
-                            <div className="flex justify-between items-center mb-4">
-                                <label className="text-xs text-corporate-text-muted font-medium">Time Period:</label>
+                        <div className="bg-corporate-bg/50 -mx-5 -mb-5 p-4 border-t border-corporate-border mt-auto">
+                            <div className="flex justify-between items-center mb-3">
+                                <label className="text-[10px] text-corporate-text-muted font-medium">Period:</label>
                                 <select
                                     id="report-range"
-                                    className="bg-corporate-card border border-corporate-border text-xs text-corporate-text-main rounded px-2 py-1 outline-none focus:border-corporate-primary"
+                                    className="bg-corporate-card border border-corporate-border text-[10px] text-corporate-text-main rounded px-1 py-0.5 outline-none focus:border-corporate-primary"
                                 >
-                                    <option value="30">Last 30 Days</option>
-                                    <option value="180">Last 6 Months</option>
-                                    <option value="365">Last 1 Year</option>
-                                    <option value="all">All Time</option>
+                                    <option value="30">30 Days</option>
+                                    <option value="180">6 Months</option>
+                                    <option value="365">1 Year</option>
                                 </select>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 gap-2">
                                 <button
                                     onClick={() => handleReportDownload('analysis')}
                                     disabled={downloading.analysis}
-                                    className="flex flex-col items-center justify-center p-3 rounded bg-corporate-primary/10 hover:bg-corporate-primary/20 border border-corporate-primary/20 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex items-center justify-between p-2 rounded bg-corporate-primary/10 hover:bg-corporate-primary/20 border border-corporate-primary/20 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed w-full"
                                 >
-                                    {downloading.analysis ? (
-                                        <div className="h-4 w-4 border-2 border-corporate-primary border-t-transparent rounded-full animate-spin mb-1"></div>
-                                    ) : (
-                                        <ArrowDownRight size={16} className="text-corporate-primary mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
-                                    )}
-                                    <span className="text-[10px] font-semibold text-corporate-primary">
-                                        {downloading.analysis ? "Generating..." : "Analysis Report"}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <ArrowDownRight size={14} className="text-corporate-primary" />
+                                        <span className="text-[10px] font-semibold text-corporate-primary">Analysis Report</span>
+                                    </div>
+                                    {downloading.analysis && <div className="h-3 w-3 border-2 border-corporate-primary border-t-transparent rounded-full animate-spin"></div>}
                                 </button>
                                 <button
                                     onClick={() => handleReportDownload('statement')}
                                     disabled={downloading.statement}
-                                    className="flex flex-col items-center justify-center p-3 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex items-center justify-between p-2 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed w-full"
                                 >
-                                    {downloading.statement ? (
-                                        <div className="h-4 w-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-1"></div>
-                                    ) : (
-                                        <Wallet size={16} className="text-emerald-500 mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
-                                    )}
-                                    <span className="text-[10px] font-semibold text-emerald-500">
-                                        {downloading.statement ? "Generating..." : "Bank Statement"}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <Wallet size={14} className="text-emerald-500" />
+                                        <span className="text-[10px] font-semibold text-emerald-500">Bank Statement</span>
+                                    </div>
+                                    {downloading.statement && <div className="h-3 w-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>}
                                 </button>
                                 <button
                                     onClick={() => handleReportDownload('portfolio')}
                                     disabled={downloading.portfolio}
-                                    className="flex flex-col items-center justify-center p-3 rounded bg-corporate-primary/10 hover:bg-corporate-primary/20 border border-corporate-primary/20 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex items-center justify-between p-2 rounded bg-corporate-primary/10 hover:bg-corporate-primary/20 border border-corporate-primary/20 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed w-full"
                                 >
-                                    {downloading.portfolio ? (
-                                        <div className="h-4 w-4 border-2 border-corporate-primary border-t-transparent rounded-full animate-spin mb-1"></div>
-                                    ) : (
-                                        <Briefcase size={16} className="text-corporate-primary mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
-                                    )}
-                                    <span className="text-[10px] font-semibold text-corporate-primary">
-                                        {downloading.portfolio ? "Generating..." : "Portfolio Report"}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <Briefcase size={14} className="text-corporate-primary" />
+                                        <span className="text-[10px] font-semibold text-corporate-primary">Portfolio Report</span>
+                                    </div>
+                                    {downloading.portfolio && <div className="h-3 w-3 border-2 border-corporate-primary border-t-transparent rounded-full animate-spin"></div>}
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Confidence Meter Modal */}
+            {showConfidenceMeter && <ConfidenceMeter onClose={() => setShowConfidenceMeter(false)} />}
         </div>
     );
 };
@@ -312,7 +315,7 @@ const KPICard = ({ title, amount, icon: Icon, trend, isPositive, isCurrency, val
         </div>
         <div className="flex items-baseline gap-2 mt-1">
             <h3 className={`text-2xl font-bold ${valueColor || 'text-corporate-text-main'}`}>
-                {isCurrency ? `₹${(Math.abs(amount) || 0).toLocaleString()}` : amount}
+                {isCurrency ? `₹${(Math.abs(amount) || 0).toLocaleString('en-IN')}` : amount}
             </h3>
         </div>
         <div className="mt-3 flex items-center gap-2">

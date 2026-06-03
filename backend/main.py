@@ -280,6 +280,31 @@ def get_stats(user: User = Depends(get_current_user), db: Session = Depends(get_
 
     balance = all_income + all_expense
     
+    # Previous Period Calculations
+    if curr_month == 1:
+        prev_month = 12
+        prev_month_year = curr_year - 1
+    else:
+        prev_month = curr_month - 1
+        prev_month_year = curr_year
+        
+    prev_year = curr_year - 1
+    
+    # Prev Month
+    prev_month_filters = [extract('month', Transaction.date) == prev_month, extract('year', Transaction.date) == prev_month_year]
+    prev_month_income = get_sum('Income', prev_month_filters)
+    prev_month_expense = get_sum('Expense', prev_month_filters)
+    
+    # Prev Year
+    prev_year_filters = [extract('year', Transaction.date) == prev_year]
+    prev_year_income = get_sum('Income', prev_year_filters)
+    prev_year_expense = get_sum('Expense', prev_year_filters)
+    
+    def calc_trend(current, previous):
+        if previous == 0:
+            return 100.0 if current > 0 else 0.0
+        return round(((current - previous) / abs(previous)) * 100, 1)
+
     return {
         "balance": round(balance, 2),
         "credit": {
@@ -292,7 +317,16 @@ def get_stats(user: User = Depends(get_current_user), db: Session = Depends(get_
             "yearly": round(year_expense, 2),
             "all_time": round(all_expense, 2)
         },
-        # Legacy support if needed, or remove? I'll support old keys temporarily if needed but preferably I update frontend
+        "trends": {
+            "monthly": {
+                "income": calc_trend(month_income, prev_month_income),
+                "expense": calc_trend(month_expense, prev_month_expense)
+            },
+            "yearly": {
+                "income": calc_trend(year_income, prev_year_income),
+                "expense": calc_trend(year_expense, prev_year_expense)
+            }
+        },
         "income": round(all_income, 2), 
         "expense": round(all_expense, 2)
     }
@@ -1241,6 +1275,101 @@ def simulate_transaction(req: SimulationRequest, user: User = Depends(get_curren
         }
     except Exception as e:
         print(f"Simulation error: {e}")
+
+# --- FinanceIQ Confidence Meter ---
+from llm_service import analyze_purchase_confidence
+
+class ConfidenceRequest(BaseModel):
+    amount: float
+    category: str
+    description: str
+
+@app.post("/api/confidence-meter")
+def get_confidence_meter(req: ConfidenceRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        # 1. Gather Financial Data
+        # Balance
+        stats = get_stats(user, db)
+        current_balance = stats['balance']
+        
+        # Upcoming Bills (Next 30 days)
+        today = datetime.now().date()
+        next_30 = today + timedelta(days=30)
+        upcoming_bills = db.query(func.sum(RecurringPayment.amount)).filter(
+            RecurringPayment.user_id == user.id,
+            RecurringPayment.next_due_date >= today,
+            RecurringPayment.next_due_date <= next_30,
+            RecurringPayment.is_active == True,
+            RecurringPayment.category != 'Income'
+        ).scalar() or 0.0
+        
+        # Emergency Fund Status
+        ef_goal = db.query(InvestmentGoal).filter(InvestmentGoal.user_id == user.id, InvestmentGoal.name.ilike("%emergency%")).first()
+        ef_status = "Unknown"
+        ef_shortfall = 0.0
+        if ef_goal:
+            ef_status = "On Track" if ef_goal.current_amount >= ef_goal.target_amount else "Below Target"
+            ef_shortfall = max(0, ef_goal.target_amount - ef_goal.current_amount)
+        else:
+             # Heuristic: 6x monthly expenses
+             monthly_expenses = stats['debit']['monthly'] or 1.0
+             target = monthly_expenses * 6
+             ef_shortfall = target  # Assume 0 saved if no goal found
+             ef_status = "No Fund Set"
+
+        # 2. AI Analysis
+        context = f"""
+        Current Balance: {current_balance}
+        Upcoming Bills (30d): {upcoming_bills}
+        Emergency Fund Status: {ef_status} (Shortfall: {ef_shortfall})
+        Monthly Expense Avg: {stats['debit']['monthly']}
+        """
+        
+        ai_result = analyze_purchase_confidence(req.amount, req.category, req.description, context)
+        
+        # 3. Calculate Confidence Score (Weighted)
+        score = 50 # Base
+        
+        # Financial Health Factors (+/- 40 points)
+        if current_balance > req.amount * 5: score += 15
+        elif current_balance > req.amount * 2: score += 5
+        elif current_balance < req.amount: score -= 30
+        
+        remaining_after = current_balance - req.amount
+        if remaining_after < upcoming_bills: score -= 25 # Critical: Can't pay bills
+        
+        if ef_status == "Below Target" or ef_status == "No Fund Set": score -= 5
+        
+        # AI Factors (+/- 30 points)
+        if ai_result['necessity_score'] >= 8: score += 20
+        elif ai_result['necessity_score'] <= 3: score -= 10
+        
+        if ai_result['purchase_type'] == 'Luxury': score -= 10
+        if ai_result['purchase_type'] == 'Impulse': score -= 15
+        
+        # Cap Score
+        score = max(0, min(100, score))
+        
+        # Determine Verdict
+        verdict = "RECONSIDER"
+        if score >= 80: verdict = "GO FOR IT"
+        elif score >= 60: verdict = "OK TO BUY"
+        elif score < 40: verdict = "AVOID"
+        
+        # Construct Response
+        return {
+            "verdict": verdict,
+            "confidence_score": score,
+            "ai_analysis": ai_result,
+            "financial_health": {
+                "balance_after": remaining_after,
+                "bills_coverage": "Sufficient" if remaining_after > upcoming_bills else "Insufficient",
+                "emergency_fund_impact": "Negative" if ef_shortfall > 0 else "Neutral"
+            }
+        }
+
+    except Exception as e:
+        print(f"Confidence Meter Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- File Upload & Pipeline ---

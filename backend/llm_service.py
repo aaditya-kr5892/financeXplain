@@ -94,3 +94,82 @@ def generate_financial_advice(user_question: str, financial_data: str = "", hist
     print("API unavailable (All models failed).")
     
     return f"I'm currently unable to connect to my AI brain. (Error: {last_error})"
+
+import json
+
+def analyze_purchase_confidence(amount: float, category: str, description: str, financial_context: str) -> dict:
+    """
+    Analyzes a potential purchase using AI to determine necessity, type, and alternatives.
+    Returns a JSON object with scoring and reasoning.
+    """
+    prompt = f"""
+    You are FinanceIQ, an AI purchase advisor.
+    
+    USER WANT TO BUY:
+    - Item: {description}
+    - Category: {category}
+    - Cost: {amount}
+    
+    USER FINANCIAL CONTEXT:
+    {financial_context}
+    
+    TASK:
+    Analyze this purchase deepy based on the user's financial context.
+    
+    OUTPUT FORMAT:
+    Return ONLY a raw JSON object (no markdown, no backticks) with this structure:
+    {{
+        "necessity_score": (int 1-10, where 10 is critical survival need, 1 is pure luxury),
+        "purchase_type": (one of: "Essential", "Important", "Discretionary", "Luxury", "Impulse"),
+        "sentiment": (one of: "Positive", "Neutral", "Caution", "Negative"),
+        "reasoning": "Short 1-sentence explanation of why",
+        "recommendation": "Short 1-sentence actionable advice (e.g. 'Wait 5 days', 'Buy generic')",
+        "alternatives": ["Alt 1", "Alt 2"] (List of 2 short specific alternative ideas if applicable, else empty)
+    }}
+    
+    SCORING GUIDE:
+    - Medicine, Rent, Basic Food -> Score 9-10 (Essential)
+    - Work tools, Repairs -> Score 6-8 (Important)
+    - Dining out, Hobby -> Score 3-5 (Discretionary)
+    - High-end brands, Jewelry -> Score 1-2 (Luxury)
+    """
+    
+    models_to_try = [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "google/gemini-2.0-flash-exp:free"
+    ]
+    
+    for model in models_to_try:
+        try:
+            print(f"FinanceIQ analyzing with: {model}")
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "You are a JSON-only financial analysis engine. Output valid JSON only."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.4, # Lower temp for consistent JSON
+                timeout=45
+            )
+            
+            content = completion.choices[0].message.content.strip()
+            # Clean possible markdown code blocks
+            if content.startswith("```"):
+                content = content.replace("```json", "").replace("```", "")
+            
+            return json.loads(content)
+            
+        except Exception as e:
+             print(f"Model {model} failed for analysis: {e}")
+             continue
+             
+    # Fallback
+    return {
+        "necessity_score": 5,
+        "purchase_type": "Discretionary",
+        "sentiment": "Neutral",
+        "reasoning": "AI Analysis unavailable, proceed with caution.",
+        "recommendation": "Check your budget manually.",
+        "alternatives": []
+    }
+
