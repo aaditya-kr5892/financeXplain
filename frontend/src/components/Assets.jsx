@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Plus, Minus, Trash2, TrendingUp, DollarSign, Wallet, Building, Landmark, Bitcoin, Briefcase, RefreshCw } from 'lucide-react';
+import { Plus, Minus, Trash2, TrendingUp, TrendingDown, DollarSign, Wallet, Building, Landmark, Bitcoin, Briefcase, RefreshCw } from 'lucide-react';
 import Modal from './Modal';
 import StockSearch from './StockSearch';
 import StockDetailModal from './StockDetailModal';
@@ -295,7 +295,7 @@ const Assets = () => {
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className={`p-2 rounded ${isProfit ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                                        {getIcon(asset.type)}
+                                                        {isProfit ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
                                                     </div>
                                                     <div>
                                                         <div className="font-medium text-corporate-text-main">
@@ -405,7 +405,7 @@ const Assets = () => {
                             placeholder="e.g. Reliance Industries"
                         />
                     </div>
-                    {(newAsset.type === 'Stock' || newAsset.type === 'Crypto' || newAsset.type === 'Mutual Fund') && (
+                    {(newAsset.type === 'Stock' || newAsset.type === 'Crypto' || newAsset.type === 'Mutual Fund' || newAsset.type === 'Gold') && (
                         <div className="mb-4">
                             <label className="block text-sm font-medium text-corporate-text-secondary mb-1">Ticker Search (Auto-Complete)</label>
                             <StockSearch

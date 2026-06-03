@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Sparkles, Send, Bot, Plus, MessageSquare, Trash2, Menu } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 const Insights = () => {
     const [input, setInput] = useState('');
@@ -150,8 +154,8 @@ const Insights = () => {
                             key={session.id}
                             onClick={() => setCurrentSessionId(session.id)}
                             className={`group flex items-center justify-between p-3 rounded-lg text-sm cursor-pointer transition-all ${currentSessionId === session.id
-                                    ? 'bg-corporate-primary/10 text-corporate-text-main border border-corporate-primary/20'
-                                    : 'text-corporate-text-secondary hover:bg-white/5 hover:text-corporate-text-main'
+                                ? 'bg-corporate-primary/10 text-corporate-text-main border border-corporate-primary/20'
+                                : 'text-corporate-text-secondary hover:bg-white/5 hover:text-corporate-text-main'
                                 }`}
                         >
                             <div className="flex items-center gap-3 overflow-hidden">
@@ -197,13 +201,18 @@ const Insights = () => {
                         >
                             <div
                                 className={`max-w-[85%] lg:max-w-[70%] p-4 rounded-2xl shadow-sm ${msg.role === 'user'
-                                        ? 'bg-corporate-primary text-white rounded-tr-sm'
-                                        : 'bg-corporate-card border border-corporate-border text-corporate-text-main rounded-tl-sm'
+                                    ? 'bg-corporate-primary text-white rounded-tr-sm'
+                                    : 'bg-corporate-card border border-corporate-border text-corporate-text-main rounded-tl-sm'
                                     }`}
                             >
                                 {msg.role === 'assistant' ? (
-                                    <div className="prose prose-invert prose-sm max-w-none">
-                                        <p className="whitespace-pre-line leading-relaxed">{msg.content}</p>
+                                    <div className="prose prose-invert prose-sm max-w-none leading-relaxed">
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkMath]}
+                                            rehypePlugins={[rehypeKatex]}
+                                        >
+                                            {msg.content}
+                                        </ReactMarkdown>
                                     </div>
                                 ) : (
                                     <p className="text-sm">{msg.content}</p>

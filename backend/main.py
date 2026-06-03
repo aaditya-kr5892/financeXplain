@@ -12,6 +12,8 @@ import uuid
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 from database import get_db, engine, Base
+from datetime import time
+from reports import create_pdf_report as generate_financial_report, create_statement_pdf as generate_transaction_statement, generate_portfolio_pdf
 from models import User, Transaction, Budget, ChatSession, ChatMessage, ExpenseGroup, GroupMember, SharedExpense, ExpenseSplit, RecurringPayment, PaymentNotification, Asset, PortfolioSnapshot, InvestmentGoal, RiskProfile
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
@@ -1622,6 +1624,21 @@ def create_recurring_payment(
     except Exception as e:
         print(f"Error creating recurring payment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/report/portfolio")
+def get_portfolio_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    assets = db.query(Asset).filter(Asset.user_id == user.id).all()
+    if not assets:
+        raise HTTPException(status_code=400, detail="No assets found to generate report")
+    
+    pdf_bytes = generate_portfolio_pdf(assets, user)
+    
+    from fastapi.responses import Response
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Portfolio_{user.username}.pdf"}
+    )
 
 @app.get("/api/recurring-payments")
 def get_recurring_payments(

@@ -41,26 +41,26 @@ def generate_financial_advice(user_question: str, financial_data: str = "", hist
         INSTRUCTIONS (MANDATORY — FOLLOW EXACTLY):
         1. Analyze the financial data provided above.
         2. Answer the user's question directly and concisely.
-        3. Use specific numeric values from the data in every point.
-        4. Provide actionable advice.
+        3. Use specific numeric values from the data.
+        4. **USE LATEX for all mathematical expressions** (e.g., $E = mc^2$ or $$ x^2 $$). This is CRITICAL for the frontend renderer.
         5. Be encouraging and professional.
-        6. If the user refers to previous messages, use the PREVIOUS CONVERSATION context.
 
-        FORMAT REQUIREMENTS (STRICT):
-        - Output MUST be Markdown bullet points ONLY.
-        - Output MUST contain EXACTLY 4 bullet points.
-        - EACH bullet point MUST be on its OWN LINE.
-        - EACH bullet point MUST start with "- ".
-        - EACH bullet point MUST end with a newline character "\\n".
-        - Do NOT combine multiple bullets on one line.
-        - Do NOT include any text before or after the bullets.
-        - Do NOT use paragraphs.
+        FORMAT REQUIREMENTS:
+        - Use Markdown structuring (headers, lists, bold).
+        - **Mathematical formulas MUST be in LaTeX** wrapped in $ for inline or $$ for block.
+        - Do NOT use code blocks for math. Use standard LaTeX delimiters.
+        - Provide a structured response with clear insights.
+        - Keep the tone helpful and advisor-like.
 
-        EXAMPLE OUTPUT (FOLLOW THIS FORMAT EXACTLY):
-        - First point with numbers and insight.\\n
-        - Second point with numbers and insight.\\n
-        - Third point with actionable advice.\\n
-        - Fourth point with actionable advice.\\n
+        EXAMPLE OUTPUT:
+        ### Financial Overview
+        Your current balance is **₹12,000**. To reach your goal, we recommend the following:
+
+        1. **Increase Savings**: Try to save $\\frac{1}{3}$ of your income.
+        2. **Investment Growth**: If you invest $P_0$ at rate $r$, future value is:
+           $$ A = P_0 (1 + r)^t $$
+        
+        Let's maximize your *wealth*!
     """
 
 

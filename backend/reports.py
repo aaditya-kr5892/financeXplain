@@ -28,6 +28,130 @@ def sanitize_for_pdf(text):
     # Remove any remaining non-Latin-1 characters
     return text.encode('latin-1', errors='ignore').decode('latin-1')
 
+def generate_portfolio_pdf(assets, user):
+    pdf = PDFReport(orientation='L')
+    pdf.alias_nb_pages()
+    
+    # Page 1: Cover
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 24)
+    pdf.set_text_color(127, 86, 217)
+    pdf.cell(0, 40, 'Portfolio+ Analysis Report (Self)', 0, 1, 'C')
+    
+    pdf.set_font('Arial', '', 14)
+    pdf.set_text_color(50)
+    pdf.cell(0, 10, f'Prepared for: {user.username}', 0, 1, 'C')
+    pdf.cell(0, 10, f'Generated on: {datetime.now().strftime("%B %d, %Y")}', 0, 1, 'C')
+    
+    pdf.ln(20)
+    pdf.set_font('Arial', 'I', 10)
+    pdf.multi_cell(0, 10, "This report provides a comprehensive overview of your current asset holdings, including invested value, current market value, and unrealized profit/loss.", 0, 'C')
+
+    # Page 2: Table
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 16)
+    pdf.set_text_color(0)
+    pdf.cell(0, 10, 'P&L Statement', 0, 1, 'L')
+    pdf.ln(5)
+    
+    # Table Header
+    cols = ["Scrip Name", "Qty", "Buy Avg", "Invested", "Cur. Price", "Cur. Value", "P&L"]
+    w = [55, 15, 25, 30, 25, 30, 25] # Adjusted widths
+    
+    pdf.set_fill_color(240, 240, 245)
+    pdf.set_font('Arial', 'B', 9)
+    for i, col in enumerate(cols):
+        pdf.cell(w[i], 10, col, 1, 0, 'C', 1)
+    pdf.ln()
+    
+    # Rows
+    pdf.set_font('Arial', '', 8)
+    total_invested = 0
+    total_current = 0
+    
+    for asset in assets:
+        name = sanitize_for_pdf(asset.name or asset.symbol or "Unknown")
+        qty = asset.quantity
+        buy_avg = asset.purchase_price
+        invested = qty * buy_avg
+        cur_price = asset.current_price
+        cur_val = qty * cur_price
+        pl = cur_val - invested
+        
+        total_invested += invested
+        total_current += cur_val
+        
+        pdf.cell(w[0], 10, name[:35], 1) # Limit length
+        pdf.cell(w[1], 10, str(round(qty, 2)), 1, 0, 'R')
+        pdf.cell(w[2], 10, f"{buy_avg:.2f}", 1, 0, 'R')
+        pdf.cell(w[3], 10, f"{invested:.2f}", 1, 0, 'R')
+        pdf.cell(w[4], 10, f"{cur_price:.2f}", 1, 0, 'R')
+        pdf.cell(w[5], 10, f"{cur_val:.2f}", 1, 0, 'R')
+        
+        # Color P&L
+        if pl >= 0:
+            pdf.set_text_color(0, 150, 0)
+        else:
+            pdf.set_text_color(200, 0, 0)
+        pdf.cell(w[6], 10, f"{pl:.2f}", 1, 0, 'R')
+        pdf.set_text_color(0) # Reset
+        pdf.ln()
+
+    # Totals
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.cell(sum(w[:3]), 10, 'Total Portfolio Value', 1, 0, 'R', 1)
+    pdf.cell(w[3], 10, f"{total_invested:.2f}", 1, 0, 'R', 1)
+    pdf.cell(w[4], 10, '', 1, 0, '', 1)
+    pdf.cell(w[5], 10, f"{total_current:.2f}", 1, 0, 'R', 1)
+    
+    total_pl = total_current - total_invested
+    if total_pl >= 0:
+        pdf.set_text_color(0, 150, 0)
+    else:
+        pdf.set_text_color(200, 0, 0)
+    pdf.cell(w[6], 10, f"{total_pl:.2f}", 1, 0, 'R', 1)
+
+    # Page 3: Transaction History (Derived from Current Holdings)
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 16)
+    pdf.set_text_color(0)
+    pdf.cell(0, 10, 'Asset Purchase History', 0, 1, 'L')
+    pdf.ln(5)
+    
+    h_cols = ["Date", "Scrip Name", "Type", "Qty", "Price", "Total"]
+    h_w = [40, 80, 25, 25, 35, 40]
+    
+    # Headers
+    pdf.set_fill_color(240, 240, 245)
+    pdf.set_font('Arial', 'B', 9)
+    for i, col in enumerate(h_cols):
+        pdf.cell(h_w[i], 10, col, 1, 0, 'C', 1)
+    pdf.ln()
+    
+    # Rows (Sorted by date descending)
+    try:
+        sorted_assets = sorted(assets, key=lambda x: x.purchase_date or datetime.min.date(), reverse=True)
+    except:
+        sorted_assets = assets
+    
+    pdf.set_font('Arial', '', 9)
+    for asset in sorted_assets:
+        p_date = str(asset.purchase_date) if asset.purchase_date else "N/A"
+        name = sanitize_for_pdf(asset.name or asset.symbol or "Unknown")[:45]
+        
+        pdf.cell(h_w[0], 10, p_date, 1, 0, 'C')
+        pdf.cell(h_w[1], 10, name, 1, 0, 'L')
+        pdf.set_text_color(0, 100, 0)
+        pdf.cell(h_w[2], 10, "Buy", 1, 0, 'C')
+        pdf.set_text_color(0)
+        pdf.cell(h_w[3], 10, str(round(asset.quantity, 2)), 1, 0, 'R')
+        pdf.cell(h_w[4], 10, f"{asset.purchase_price:.2f}", 1, 0, 'R')
+        pdf.cell(h_w[5], 10, f"{(asset.quantity * asset.purchase_price):.2f}", 1, 0, 'R')
+        pdf.ln()
+    
+    return pdf.output(dest='S').encode('latin-1', errors='ignore')
+
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)

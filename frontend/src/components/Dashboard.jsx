@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertCircle, TrendingUp, DollarSign, Activity, Target } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertCircle, TrendingUp, DollarSign, Activity, Target, Briefcase } from 'lucide-react';
 import axios from 'axios';
 import Budget from './Budget';
 import FinancialHealth from './FinancialHealth';
@@ -16,7 +16,7 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
 
     const [period, setPeriod] = useState('monthly'); // For Chart
     const [overviewPeriod, setOverviewPeriod] = useState('monthly'); // For Cards
-    const [downloading, setDownloading] = useState({ analysis: false, statement: false });
+    const [downloading, setDownloading] = useState({ analysis: false, statement: false, portfolio: false });
 
     useEffect(() => {
         const fetchData = async () => {
@@ -52,8 +52,19 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
         try {
             setDownloading(prev => ({ ...prev, [type]: true }));
 
-            let endpoint = type === 'analysis' ? '/api/report/pdf' : '/api/report/statement';
-            let filename = type === 'analysis' ? 'Financial_Analysis.pdf' : 'Transaction_Statement.pdf';
+            let endpoint;
+            let filename;
+
+            if (type === 'analysis') {
+                endpoint = '/api/report/pdf';
+                filename = 'Financial_Analysis.pdf';
+            } else if (type === 'statement') {
+                endpoint = '/api/report/statement';
+                filename = 'Transaction_Statement.pdf';
+            } else if (type === 'portfolio') {
+                endpoint = '/api/report/portfolio';
+                filename = 'Portfolio_Report.pdf';
+            }
 
             const res = await axios.get(`${endpoint}${query}`, { responseType: 'blob' });
             const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
@@ -268,6 +279,20 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
                                     )}
                                     <span className="text-[10px] font-semibold text-emerald-500">
                                         {downloading.statement ? "Generating..." : "Bank Statement"}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => handleReportDownload('portfolio')}
+                                    disabled={downloading.portfolio}
+                                    className="flex flex-col items-center justify-center p-3 rounded bg-corporate-primary/10 hover:bg-corporate-primary/20 border border-corporate-primary/20 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {downloading.portfolio ? (
+                                        <div className="h-4 w-4 border-2 border-corporate-primary border-t-transparent rounded-full animate-spin mb-1"></div>
+                                    ) : (
+                                        <Briefcase size={16} className="text-corporate-primary mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
+                                    )}
+                                    <span className="text-[10px] font-semibold text-corporate-primary">
+                                        {downloading.portfolio ? "Generating..." : "Portfolio Report"}
                                     </span>
                                 </button>
                             </div>
