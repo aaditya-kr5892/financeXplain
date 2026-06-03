@@ -90,6 +90,7 @@ const Insights = () => {
             }
         } catch (err) {
             console.error("Failed to delete", err);
+            alert(`Failed to delete chat: ${err.response?.data?.detail || err.message}`);
         }
     };
 

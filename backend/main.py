@@ -478,6 +478,8 @@ def send_message(session_id: str, request: AdviceRequest, user: User = Depends(g
 def delete_session(session_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.user_id == user.id).first()
     if session:
+        # Manually delete messages first to avoid Foreign Key violations if cascade isn't set at DB level
+        db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete()
         db.delete(session)
         db.commit()
     return {"status": "success"}

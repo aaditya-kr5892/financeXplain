@@ -1,6 +1,0 @@
-Error creating asset: cannot access local variable 'current_price' where it is not associated with a value
-Error creating asset: cannot access local variable 'current_price' where it is not associated with a value
-Error creating asset: cannot access local variable 'current_price' where it is not associated with a value
-Error creating asset: cannot access local variable 'current_price' where it is not associated with a value
-Error creating asset: cannot access local variable 'current_price' where it is not associated with a value
-Error creating asset: cannot access local variable 'current_price' where it is not associated with a value
