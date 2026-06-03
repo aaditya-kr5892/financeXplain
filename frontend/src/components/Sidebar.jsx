@@ -1,40 +1,48 @@
 import React from 'react';
-import { Home, PieChart, TrendingUp, Settings, Activity } from 'lucide-react';
+import { LayoutDashboard, Receipt, LineChart, TrendingUp, Settings, SlidersHorizontal, PieChart } from 'lucide-react';
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
     const menuItems = [
-        { id: 'dashboard', label: 'Overview', icon: Home },
-        { id: 'transactions', label: 'Transactions', icon: PieChart },
-        { id: 'insights', label: 'Smart Insights', icon: Activity },
-        { id: 'forecast', label: 'Future Cashflow', icon: TrendingUp },
+        { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+        { id: 'transactions', label: 'Transactions', icon: Receipt },
+        { id: 'insights', label: 'Analytics', icon: PieChart },
+        { id: 'forecast', label: 'Forecasts', icon: TrendingUp },
     ];
 
     return (
-        <div className="w-64 bg-slate-800/50 backdrop-blur-xl border-r border-white/10 flex flex-col p-6 h-screen fixed left-0 top-0">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text mb-10">
-                FinDash AI
-            </h2>
+        <div className="w-64 bg-corporate-card border-r border-corporate-border flex flex-col h-screen fixed left-0 top-0 z-50">
+            {/* Logo Area */}
+            <div className="h-16 flex items-center px-6 border-b border-corporate-border">
+                <div className="flex items-center gap-2 text-corporate-text-main font-bold text-xl tracking-tight">
+                    <div className="w-8 h-8 bg-corporate-primary/20 rounded-md flex items-center justify-center text-corporate-primary">
+                        <LineChart size={20} />
+                    </div>
+                    FinSight
+                </div>
+            </div>
 
-            <nav className="flex-1 space-y-2">
+            {/* Navigation */}
+            <nav className="flex-1 py-6 px-3 space-y-1">
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => setActiveTab(item.id)}
-                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 ${activeTab === item.id
-                                ? 'bg-blue-600 shadow-lg shadow-blue-500/20 text-white'
-                                : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                        className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-md transition-all duration-200 text-sm font-medium ${activeTab === item.id
+                            ? 'bg-corporate-primary/10 text-corporate-primary border-l-2 border-corporate-primary'
+                            : 'text-corporate-text-secondary hover:bg-white/5 hover:text-corporate-text-main'
                             }`}
                     >
-                        <item.icon size={20} />
-                        <span className="font-medium">{item.label}</span>
+                        <item.icon size={18} className={activeTab === item.id ? "text-corporate-primary" : "text-corporate-text-secondary group-hover:text-corporate-text-main"} />
+                        <span>{item.label}</span>
                     </button>
                 ))}
             </nav>
 
-            <div className="pt-6 border-t border-white/10">
-                <button className="w-full flex items-center space-x-3 px-4 py-2 text-gray-400 hover:text-white transition-colors">
-                    <Settings size={20} />
-                    <span>Settings</span>
+            {/* Footer / Settings */}
+            <div className="p-4 border-t border-corporate-border">
+                <button className="w-full flex items-center space-x-3 px-3 py-2 text-corporate-text-secondary hover:text-white transition-colors text-sm font-medium">
+                    <Settings size={18} />
+                    <span>Configuration</span>
                 </button>
             </div>
         </div>

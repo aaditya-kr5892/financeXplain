@@ -25,34 +25,34 @@ const Insights = () => {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in zoom-in duration-500">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in zoom-in duration-500 h-full">
 
             {/* Input Section */}
-            <div className="space-y-6">
-                <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-20">
-                        <Sparkles size={100} />
+            <div className="space-y-6 flex flex-col h-full">
+                <div className="bg-corporate-card border border-corporate-border rounded-lg p-8 shadow-sm relative overflow-hidden flex-1 flex flex-col justify-center">
+                    <div className="absolute top-0 right-0 p-4 opacity-5">
+                        <Sparkles size={150} className="text-corporate-primary" />
                     </div>
-                    <h2 className="text-3xl font-bold mb-4">Financial AI Advisor</h2>
-                    <p className="text-indigo-100 mb-8 text-lg">
-                        Ask me anything about your finances. I can analyze your spending patterns, forecast liquidity, and help you budget better.
+                    <h2 className="text-3xl font-bold mb-4 text-corporate-text-main tracking-tight">Financial AI Advisor</h2>
+                    <p className="text-corporate-text-secondary mb-8 text-lg font-light leading-relaxed">
+                        Your intelligent assistant. Ask about forecast trends, potential anomalies, or personalized budget advice.
                     </p>
 
-                    <div className="relative">
+                    <div className="relative w-full max-w-lg">
                         <input
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="e.g., How can I save more on food?"
-                            className="w-full bg-white/10 border border-white/20 rounded-xl px-6 py-4 pr-14 text-white placeholder-indigo-200 focus:outline-none focus:bg-white/20 transition-all"
+                            placeholder="e.g., Is my current spending sustainable?"
+                            className="w-full bg-corporate-bg border border-corporate-border rounded-lg px-6 py-4 pr-14 text-corporate-text-main placeholder-corporate-text-muted focus:outline-none focus:border-corporate-primary focus:ring-1 focus:ring-corporate-primary transition-all shadow-inner"
                             onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
                         />
                         <button
                             onClick={handleAsk}
                             disabled={loading}
-                            className="absolute right-2 top-2 p-2 bg-white text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                            className="absolute right-2 top-2 p-2 bg-corporate-primary hover:bg-purple-600 text-white rounded-md transition-colors disabled:opacity-50 shadow-sm"
                         >
-                            {loading ? <div className="animate-spin h-5 w-5 border-2 border-indigo-600 border-t-transparent rounded-full" /> : <Send size={20} />}
+                            {loading ? <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" /> : <Send size={20} />}
                         </button>
                     </div>
                 </div>
@@ -63,7 +63,7 @@ const Insights = () => {
                         <button
                             key={prompt}
                             onClick={() => setInput(prompt)}
-                            className="p-4 bg-slate-800/50 hover:bg-slate-700 rounded-xl border border-white/5 text-left text-sm text-slate-300 transition-colors"
+                            className="p-4 bg-corporate-card hover:bg-corporate-bg border border-corporate-border hover:border-corporate-primary/50 text-left text-sm text-corporate-text-secondary hover:text-corporate-text-main transition-all rounded-lg shadow-sm"
                         >
                             {prompt}
                         </button>
@@ -72,22 +72,25 @@ const Insights = () => {
             </div>
 
             {/* Response Section */}
-            <div className="bg-slate-800/30 rounded-3xl p-8 border border-white/5 h-full min-h-[400px] relative">
-                <div className="absolute top-4 left-4 p-2 bg-green-500/20 rounded-lg text-green-400">
-                    <Bot size={24} />
+            <div className="bg-corporate-card rounded-lg p-8 border border-corporate-border h-full min-h-[400px] relative overflow-y-auto custom-scrollbar">
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-corporate-border border-dashed">
+                    <div className="p-2 bg-corporate-accent/10 rounded-lg text-corporate-accent">
+                        <Bot size={24} />
+                    </div>
+                    <h3 className="text-sm font-bold text-corporate-text-secondary uppercase tracking-wider">Advisor Response</h3>
                 </div>
 
-                <div className="mt-12">
+                <div className="mt-4">
                     {response ? (
                         <div className="prose prose-invert max-w-none">
-                            <p className="text-lg leading-relaxed text-slate-200 animate-in fade-in">
+                            <p className="text-lg leading-relaxed text-corporate-text-main animate-in fade-in font-light">
                                 {response}
                             </p>
                         </div>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-4 opacity-50">
-                            <Bot size={48} />
-                            <p>Waiting for your question...</p>
+                        <div className="h-full flex flex-col items-center justify-center text-corporate-text-muted space-y-4 opacity-50 py-20">
+                            <Bot size={48} className="text-corporate-border" />
+                            <p className="text-sm">Waiting for your financial queries...</p>
                         </div>
                     )}
                 </div>

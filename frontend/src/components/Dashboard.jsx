@@ -1,31 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, Calendar } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
+import { ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertCircle, TrendingUp, DollarSign, Activity, Target } from 'lucide-react';
 import axios from 'axios';
 import ManualEntry from './ManualEntry';
 import Budget from './Budget';
+import FinancialHealth from './FinancialHealth';
+import ImpactSimulator from './ImpactSimulator';
+import FraudAlerts from './FraudAlerts';
 
 const Dashboard = () => {
     const [stats, setStats] = useState({ income: 0, expense: 0, balance: 0 });
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
-    const [period, setPeriod] = useState('monthly'); // weekly, monthly, yearly
+    const [period, setPeriod] = useState('monthly');
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch real stats
                 const statsRes = await axios.get('/api/stats');
                 setStats(statsRes.data);
-
-                // Fetch Analytics Data based on period
                 const analyticsRes = await axios.get(`/api/analytics?period=${period}`);
                 setData(analyticsRes.data);
-
             } catch (err) {
                 console.error("Failed to fetch dashboard data", err);
-                // Fallback
                 setStats({ income: 0, expense: 0, balance: 0 });
                 setData([]);
             } finally {
@@ -36,102 +34,181 @@ const Dashboard = () => {
     }, [refreshKey, period]);
 
     return (
-        <div className="space-y-8 animate-in fade-in zoom-in duration-500">
-            {/* Manual Entry Section - ID kept for 'Add Transaction' button scroll */}
-            <div className="mb-8" id="file-upload-section">
-                <ManualEntry onTransactionAdded={() => setRefreshKey(k => k + 1)} />
-            </div>
+        <div className="bg-corporate-bg min-h-full font-sans text-corporate-text-main p-6 animate-in fade-in zoom-in duration-300">
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard
-                    title="Total Balance"
-                    amount={`₹${stats.balance}`}
-                    trend="+12%"
-                    isPositive={true}
+            {/* Top Row: KPI Cards Strip (Minimalist) */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <KPICard
+                    title="Net Position"
+                    amount={stats.balance}
                     icon={Wallet}
+                    trend={12.5}
+                    isCurrency
                 />
-                <StatCard
-                    title="Monthly Income"
-                    amount={`₹${stats.income}`}
-                    trend="+5%"
-                    isPositive={true}
-                    icon={ArrowUpRight}
+                <KPICard
+                    title="Total Revenue"
+                    amount={stats.income}
+                    icon={DollarSign}
+                    trend={8.2}
+                    isPositive
+                    isCurrency
                 />
-                <StatCard
-                    title="Monthly Expenses"
-                    amount={`₹${Math.abs(stats.expense)}`}
-                    trend="-2%"
+                <KPICard
+                    title="Total Spend"
+                    amount={Math.abs(stats.expense)}
+                    icon={Activity}
+                    trend={-2.4}
                     isPositive={false}
-                    color="red"
-                    icon={ArrowDownRight}
+                    isCurrency
+                />
+                <KPICard
+                    title="Savings Rate"
+                    amount={`${stats.income ? Math.round(((stats.income - Math.abs(stats.expense)) / stats.income) * 100) : 0}%`}
+                    icon={Target}
+                    trend={1.2}
+                    isPositive
                 />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Main Chart (Span 2 cols) */}
-                <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10 shadow-xl">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-semibold">Cash Flow Analytics</h3>
-                        <div className="bg-slate-700/50 p-1 rounded-lg flex space-x-1">
-                            {['weekly', 'monthly', 'yearly'].map((p) => (
-                                <button
-                                    key={p}
-                                    onClick={() => setPeriod(p)}
-                                    className={`px-3 py-1 text-xs font-medium rounded-md capitalize transition-all ${period === p
-                                            ? 'bg-blue-600 text-white shadow-md'
-                                            : 'text-slate-400 hover:text-white'
-                                        }`}
-                                >
-                                    {p}
-                                </button>
-                            ))}
-                        </div>
+            {/* Main Content Grid: Bento Box Style */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+                {/* Column 1: Actions & Context (Left Sidebar feel) */}
+                <div className="lg:col-span-1 space-y-6">
+                    {/* Quick Entry */}
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm">
+                        <ManualEntry onTransactionAdded={() => setRefreshKey(k => k + 1)} />
                     </div>
 
-                    <div className="h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={data}>
-                                <defs>
-                                    <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                                <XAxis dataKey="name" stroke="#94a3b8" />
-                                <YAxis stroke="#94a3b8" />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
-                                    itemStyle={{ color: '#fff' }}
-                                />
-                                <Area type="monotone" dataKey="amount" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAmt)" />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                    {/* Simulator */}
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm h-fit">
+                        <ImpactSimulator />
                     </div>
                 </div>
 
-                {/* Budget Component (Span 1 col) */}
-                <div className="lg:col-span-1">
-                    <Budget />
+                {/* Column 2 & 3: Main Visuals (Center Stage) */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Main Chart */}
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm min-h-[400px]">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 className="text-lg font-semibold text-corporate-text-main">Cash Flow Trends</h3>
+                                <p className="text-xs text-corporate-text-secondary uppercase tracking-wider">Revenue vs Expenses</p>
+                            </div>
+                            <div className="flex bg-corporate-bg rounded-md p-1 border border-corporate-border">
+                                {['weekly', 'monthly', 'yearly'].map((p) => (
+                                    <button
+                                        key={p}
+                                        onClick={() => setPeriod(p)}
+                                        className={`px-3 py-1 text-xs font-medium rounded capitalize transition-all ${period === p
+                                            ? 'bg-corporate-primary text-white shadow-sm'
+                                            : 'text-corporate-text-secondary hover:text-white'
+                                            }`}
+                                    >
+                                        {p}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="h-[300px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#00B7C3" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#00B7C3" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#7F56D9" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#7F56D9" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#2D2D35" vertical={false} />
+                                    <XAxis dataKey="name" stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+                                    <YAxis stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val / 1000}k`} />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#1F1F26', borderColor: '#2D2D35', color: '#FFF' }}
+                                        itemStyle={{ fontSize: 12 }}
+                                    />
+                                    <Legend iconType="circle" />
+                                    <Area type="monotone" dataKey="amount" name="Net Flow" stroke="#00B7C3" fill="url(#colorIncome)" strokeWidth={2} />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Secondary Metrics / Budget */}
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm">
+                        <Budget />
+                    </div>
+                </div>
+
+                {/* Column 4: Insights & Health (Right Sidebar) */}
+                <div className="lg:col-span-1 space-y-6">
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm">
+                        <FinancialHealth />
+                    </div>
+
+                    {/* Fraud / Security Alerts */}
+                    <div className="mb-6">
+                        <FraudAlerts />
+                    </div>
+
+                    {/* AI Insight Tile */}
+                    <div className="bg-gradient-to-b from-corporate-card to-corporate-bg border border-corporate-border rounded-lg p-5 shadow-sm relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Sparkles size={60} />
+                        </div>
+                        <h4 className="text-sm font-bold text-corporate-accent uppercase tracking-widest mb-3">AI Analysis</h4>
+                        <p className="text-corporate-text-main text-sm leading-relaxed mb-4">
+                            {Math.abs(stats.expense) > stats.income * 0.5
+                                ? "Spend Alert: Expenses exceed 50% of income ratio. Recommended action: Audit discretionary categories."
+                                : "Healthy Status: Savings trajectory aligns with Q3 targets. Revenue streams acting as primary buffer."}
+                        </p>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const res = await axios.get('/api/report');
+                                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
+                                    const downloadAnchorNode = document.createElement('a');
+                                    downloadAnchorNode.setAttribute("href", dataStr);
+                                    downloadAnchorNode.setAttribute("download", "financial_report.json");
+                                    document.body.appendChild(downloadAnchorNode);
+                                    downloadAnchorNode.click();
+                                    downloadAnchorNode.remove();
+                                } catch (e) {
+                                    console.error("Report generation failed", e);
+                                }
+                            }}
+                            className="bg-corporate-primary/10 hover:bg-corporate-primary/20 text-xs text-corporate-primary hover:text-white px-3 py-2 rounded transition-all border border-corporate-primary/20 flex items-center gap-2"
+                        >
+                            <ArrowDownRight size={14} />
+                            Download Full Report
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
 
-const StatCard = ({ title, amount, trend, isPositive, icon: Icon, color }) => (
-    <div className="bg-slate-800/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 hover:border-blue-500/50 transition-all hover:transform hover:-translate-y-1 shadow-lg">
-        <div className="flex justify-between items-start mb-4">
-            <div className={`p-3 rounded-xl ${color === 'red' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                <Icon size={24} />
-            </div>
-            <span className={`px-2 py-1 rounded-lg text-xs font-medium ${isPositive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                {trend}
-            </span>
+const KPICard = ({ title, amount, icon: Icon, trend, isPositive, isCurrency }) => (
+    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 hover:border-corporate-primary/30 transition-colors group">
+        <div className="flex justify-between items-start mb-2">
+            <span className="text-corporate-text-secondary text-xs font-semibold uppercase tracking-wider">{title}</span>
+            <Icon size={16} className="text-corporate-text-muted group-hover:text-corporate-primary transition-colors" />
         </div>
-        <h3 className="text-gray-400 text-sm font-medium">{title}</h3>
-        <p className="text-3xl font-bold mt-1">{amount}</p>
+        <div className="flex items-baseline gap-2 mt-1">
+            <h3 className="text-2xl font-bold text-corporate-text-main">
+                {isCurrency ? `₹${amount?.toLocaleString() || 0}` : amount}
+            </h3>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${trend > 0 ? 'text-emerald-400 bg-emerald-400/10' : 'text-rose-400 bg-rose-400/10'}`}>
+                {trend > 0 ? '+' : ''}{trend}%
+            </span>
+            <span className="text-corporate-text-muted text-[10px]">vs last period</span>
+        </div>
     </div>
 );
 

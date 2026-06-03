@@ -70,72 +70,72 @@ const Budget = () => {
     };
 
     return (
-        <div className="bg-slate-800/50 backdrop-blur-md rounded-2xl border border-white/10 p-6 shadow-xl animate-in fade-in slide-in-from-bottom-5 duration-700">
+        <div className="h-full">
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-semibold flex items-center gap-2">
-                    <Target className="text-purple-400" size={24} />
+                <h3 className="text-lg font-semibold flex items-center gap-2 text-corporate-text-main">
+                    <Target className="text-corporate-primary" size={20} />
                     Monthly Budgets
                 </h3>
                 <button
                     onClick={() => setIsEditing(!isEditing)}
-                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                    className="p-1.5 hover:bg-corporate-bg rounded transition-colors text-corporate-text-secondary hover:text-white"
                 >
-                    {isEditing ? <X className="text-red-400" size={20} /> : <Plus className="text-blue-400" size={20} />}
+                    {isEditing ? <X size={18} /> : <Plus size={18} />}
                 </button>
             </div>
 
             {/* Add Budget Form */}
             {isEditing && (
-                <div className="mb-6 p-4 bg-slate-700/30 rounded-lg border border-white/5 animate-in slide-in-from-top-2">
+                <div className="mb-6 p-4 bg-corporate-bg rounded-lg border border-corporate-border animate-in slide-in-from-top-2">
                     <div className="flex gap-4 items-end">
                         <div className="flex-1">
-                            <label className="block text-xs text-slate-400 mb-1">Category</label>
+                            <label className="block text-xs text-corporate-text-secondary mb-1">Category</label>
                             <select
                                 value={newBudget.category}
                                 onChange={(e) => setNewBudget({ ...newBudget, category: e.target.value })}
-                                className="w-full bg-slate-900 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                                className="w-full bg-corporate-card border border-corporate-border rounded px-3 py-2 text-sm text-corporate-text-main focus:outline-none focus:border-corporate-primary"
                             >
                                 {categories.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                         <div className="flex-1">
-                            <label className="block text-xs text-slate-400 mb-1">Budget Amount (₹)</label>
+                            <label className="block text-xs text-corporate-text-secondary mb-1">Budget Amount (₹)</label>
                             <input
                                 type="number"
                                 value={newBudget.amount}
                                 onChange={(e) => setNewBudget({ ...newBudget, amount: e.target.value })}
                                 placeholder="5000"
-                                className="w-full bg-slate-900 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                                className="w-full bg-corporate-card border border-corporate-border rounded px-3 py-2 text-sm text-corporate-text-main focus:outline-none focus:border-corporate-primary"
                             />
                         </div>
                         <button
                             onClick={handleSaveBudget}
-                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-colors"
+                            className="bg-corporate-primary hover:bg-purple-700 text-white px-3 py-2 rounded transition-colors"
                         >
-                            <Check size={18} />
+                            <Check size={16} />
                         </button>
                     </div>
                 </div>
             )}
 
             {/* Budget List */}
-            <div className="space-y-6">
+            <div className="space-y-5 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
                 {Object.entries(budgets).length === 0 ? (
-                    <p className="text-slate-400 text-sm text-center py-4">No budgets set. Click + to add one.</p>
+                    <p className="text-corporate-text-muted text-sm text-center py-4">No budgets set. Click + to add one.</p>
                 ) : (
                     Object.entries(budgets).map(([category, limit]) => {
                         const spent = spending[category] || 0;
                         const percentage = Math.min((spent / limit) * 100, 100);
 
                         return (
-                            <div key={category} className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span className="font-medium text-slate-200">{category}</span>
-                                    <span className="text-slate-400">
-                                        ₹{spent.toFixed(0)} / <span className="text-white">₹{limit}</span>
+                            <div key={category} className="space-y-1.5">
+                                <div className="flex justify-between text-xs font-medium">
+                                    <span className="text-corporate-text-secondary">{category}</span>
+                                    <span className="text-corporate-text-muted">
+                                        ₹{spent.toFixed(0)} / <span className="text-corporate-text-main">₹{limit}</span>
                                     </span>
                                 </div>
-                                <div className="h-2 bg-slate-900 rounded-full overflow-hidden">
+                                <div className="h-1.5 bg-corporate-bg rounded-full overflow-hidden">
                                     <div
                                         className={`h-full ${getProgressColor(spent, limit)} transition-all duration-500`}
                                         style={{ width: `${percentage}%` }}

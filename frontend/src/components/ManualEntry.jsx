@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, CheckCircle, AlertCircle, Loader2, Feather, DollarSign, Calendar, Tag, FileText } from 'lucide-react';
 import axios from 'axios';
 
 const ManualEntry = ({ onTransactionAdded }) => {
@@ -45,13 +45,13 @@ const ManualEntry = ({ onTransactionAdded }) => {
         // Validation
         if (!formData.date || !formData.description || !formData.amount) {
             setStatus('error');
-            setMessage('Please fill in all required fields');
+            setMessage('Please fill in all required fields.');
             return;
         }
 
         if (parseFloat(formData.amount) === 0) {
             setStatus('error');
-            setMessage('Amount cannot be zero');
+            setMessage('Transaction amount cannot be zero.');
             return;
         }
 
@@ -93,81 +93,69 @@ const ManualEntry = ({ onTransactionAdded }) => {
     };
 
     return (
-        <div className="bg-slate-800/30 border border-white/10 rounded-xl p-6">
-            <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <Plus className="text-blue-400" size={24} />
-                Add New Transaction
+        <div className="h-full">
+            <h3 className="text-lg font-semibold text-corporate-text-main mb-4 flex items-center gap-2 pb-2 border-b border-corporate-border">
+                <Plus className="text-corporate-primary" size={20} />
+                Quick Entry
             </h3>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Date Input */}
-                <div>
-                    <label htmlFor="date" className="block text-sm font-medium text-slate-300 mb-2">
-                        Date <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                        type="date"
-                        id="date"
-                        name="date"
-                        value={formData.date}
-                        onChange={handleChange}
-                        required
-                        className="w-full px-4 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                <div className="grid grid-cols-2 gap-4">
+                    {/* Date Input */}
+                    <div>
+                        <label className="block text-xs font-medium text-corporate-text-secondary mb-1">
+                            Date
+                        </label>
+                        <input
+                            type="date"
+                            name="date"
+                            value={formData.date}
+                            onChange={handleChange}
+                            required
+                            className="w-full px-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary"
+                        />
+                    </div>
+
+                    {/* Amount Input */}
+                    <div>
+                        <label className="block text-xs font-medium text-corporate-text-secondary mb-1">
+                            Amount
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-corporate-text-secondary font-bold text-xs">₹</span>
+                            <input
+                                type="number"
+                                name="amount"
+                                value={formData.amount}
+                                onChange={handleChange}
+                                placeholder="0.00"
+                                required
+                                className="w-full pl-6 pr-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary"
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {/* Description Input */}
                 <div>
-                    <label htmlFor="description" className="block text-sm font-medium text-slate-300 mb-2">
-                        Description <span className="text-red-400">*</span>
-                    </label>
                     <input
                         type="text"
-                        id="description"
                         name="description"
                         value={formData.description}
                         onChange={handleChange}
-                        placeholder="e.g., Grocery shopping at Walmart"
+                        placeholder="Description (e.g. Grocery)"
                         required
-                        className="w-full px-4 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary"
                     />
-                </div>
-
-                {/* Amount Input */}
-                <div>
-                    <label htmlFor="amount" className="block text-sm font-medium text-slate-300 mb-2">
-                        Amount <span className="text-red-400">*</span>
-                    </label>
-                    <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
-                        <input
-                            type="number"
-                            id="amount"
-                            name="amount"
-                            value={formData.amount}
-                            onChange={handleChange}
-                            placeholder="0.00"
-                            step="0.01"
-                            required
-                            className="w-full pl-8 pr-4 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                        Use negative values for expenses (e.g., -50) and positive for income (e.g., 1000)
-                    </p>
                 </div>
 
                 {/* Category Select */}
                 <div>
-                    <label htmlFor="category" className="block text-sm font-medium text-slate-300 mb-2">
-                        Category (Optional)
-                    </label>
                     <select
-                        id="category"
                         name="category"
                         value={formData.category}
                         onChange={handleChange}
-                        className="w-full px-4 py-2 bg-slate-900/50 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 bg-corporate-bg border border-corporate-border rounded text-corporate-text-main text-sm focus:outline-none focus:border-corporate-primary appearance-none"
                     >
                         {categories.map(cat => (
                             <option key={cat} value={cat === 'Auto-categorize' ? '' : cat}>
@@ -175,29 +163,26 @@ const ManualEntry = ({ onTransactionAdded }) => {
                             </option>
                         ))}
                     </select>
-                    <p className="text-xs text-slate-400 mt-1">
-                        Leave as "Auto-categorize" to use AI categorization
-                    </p>
                 </div>
 
                 {/* Submit Button */}
                 <button
                     type="submit"
                     disabled={submitting}
-                    className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 ${submitting
-                            ? 'bg-slate-700 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
-                        } text-white`}
+                    className={`w-full py-2 px-4 rounded font-medium transition-all flex items-center justify-center gap-2 text-sm ${submitting
+                        ? 'bg-corporate-bg border border-corporate-border text-corporate-text-muted cursor-not-allowed'
+                        : 'bg-corporate-primary hover:bg-purple-700 text-white'
+                        }`}
                 >
                     {submitting ? (
                         <>
-                            <Loader2 className="animate-spin" size={20} />
-                            Adding Transaction...
+                            <Loader2 className="animate-spin" size={16} />
+                            Adding...
                         </>
                     ) : (
                         <>
-                            <Plus size={20} />
-                            Add Transaction
+                            <CheckCircle size={16} />
+                            Save
                         </>
                     )}
                 </button>
@@ -205,18 +190,18 @@ const ManualEntry = ({ onTransactionAdded }) => {
                 {/* Status Message */}
                 {status && (
                     <div
-                        className={`flex items-center gap-2 p-4 rounded-lg ${status === 'success'
-                                ? 'bg-green-500/10 border border-green-500/20'
-                                : 'bg-red-500/10 border border-red-500/20'
+                        className={`flex items-center gap-2 p-2 rounded border animate-in fade-in slide-in-from-bottom-2 ${status === 'success'
+                            ? 'bg-emerald-500/10 border-emerald-500/20'
+                            : 'bg-rose-500/10 border-rose-500/20'
                             }`}
                     >
                         {status === 'success' ? (
-                            <CheckCircle className="text-green-400" size={20} />
+                            <CheckCircle className="text-emerald-400" size={16} />
                         ) : (
-                            <AlertCircle className="text-red-400" size={20} />
+                            <AlertCircle className="text-rose-400" size={16} />
                         )}
                         <p
-                            className={`text-sm ${status === 'success' ? 'text-green-400' : 'text-red-400'
+                            className={`text-xs font-medium ${status === 'success' ? 'text-emerald-400' : 'text-rose-400'
                                 }`}
                         >
                             {message}
