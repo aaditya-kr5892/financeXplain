@@ -32,7 +32,7 @@
   height: auto;
   border-radius: 12px;
   /* Subtle glow to match theme */
-  box-shadow: 0 0 40px rgba(127, 86, 217, 0.15);
+  /* box-shadow: 0 0 40px rgba(127, 86, 217, 0.15); */
   margin-bottom: 20px;
 }
 

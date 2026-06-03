@@ -11,10 +11,20 @@ from llm_service import generate_financial_advice
 import uuid
 from sqlalchemy.orm import Session
 from database import get_db, engine, Base
-from models import User, Transaction, Budget
+from models import User, Transaction, Budget, ChatSession, ChatMessage
 
 # Create Tables (if not exist)
+# Create Tables (if not exist)
 Base.metadata.create_all(bind=engine)
+
+# Load ML Models
+try:
+    with open('models/financial_models.pkl', 'rb') as f:
+        models = pickle.load(f)
+    print("ML Models loaded successfully")
+except Exception as e:
+    print(f"Warning: Could not load ML models: {e}")
+    models = {}
 
 app = FastAPI(title="Fintech Dashboard API")
 
@@ -72,6 +82,7 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
     
     return {"status": "success", "message": "User registered successfully"}
 
+
 @app.post("/api/login")
 def login(user: UserAuth, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.username == user.username).first()
@@ -99,6 +110,23 @@ async def get_current_user(x_user_id: Optional[str] = Header(None), db: Session 
     if not user:
          raise HTTPException(status_code=401, detail="User not found")
     return user
+
+# -- SEED DATA FOR DEMO --
+@app.post("/api/seed-anomaly")
+def seed_anomaly(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Create a blatantly anomalous transaction
+    anomaly = Transaction(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        date=datetime.now().date(),
+        description="Suspicious Large Transfer",
+        amount=-50000.00, # Large Debit
+        category="Shopping",
+        is_resolved=False
+    )
+    db.add(anomaly)
+    db.commit()
+    return {"status": "seeded", "amount": -50000.00}
 
 @app.get("/api/transactions")
 def get_transactions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -193,6 +221,141 @@ RECENT TRANSACTIONS (Last 10):
     except Exception as e:
         print(f"Advisor error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Chat Session API ---
+from models import ChatSession, ChatMessage
+
+class SessionCreate(BaseModel):
+    title: Optional[str] = "New Chat"
+
+@app.get("/api/chat/sessions")
+def get_sessions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    sessions = db.query(ChatSession).filter(ChatSession.user_id == user.id).order_by(ChatSession.created_at.desc()).all()
+    # Return list
+    return [{"id": s.id, "title": s.title, "date": s.created_at} for s in sessions]
+
+@app.post("/api/chat/sessions")
+def create_session(session_data: SessionCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    new_session = ChatSession(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        title=session_data.title,
+        created_at=datetime.now().date()
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+    
+    # Add initial greeting
+    greeting = ChatMessage(
+        id=str(uuid.uuid4()),
+        session_id=new_session.id,
+        role="assistant",
+        content="Hello! I'm your Financial AI Advisor. Ask me about your trends, budget, or potential anomalies.",
+        timestamp=datetime.now()
+    )
+    db.add(greeting)
+    db.commit()
+    
+    return {"id": new_session.id, "title": new_session.title, "messages": [
+        {"id": greeting.id, "role": greeting.role, "content": greeting.content}
+    ]}
+
+@app.get("/api/chat/{session_id}")
+def get_session_history(session_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Verify ownership
+    session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.user_id == user.id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    messages = db.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.timestamp).all()
+    return {
+        "id": session.id,
+        "title": session.title,
+        "messages": [{"id": m.id, "role": m.role, "content": m.content} for m in messages]
+    }
+
+@app.post("/api/chat/{session_id}/message")
+def send_message(session_id: str, request: AdviceRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Verify ownership
+    session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.user_id == user.id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Save User Message
+    user_msg = ChatMessage(
+        id=str(uuid.uuid4()),
+        session_id=session_id,
+        role="user",
+        content=request.context,
+        timestamp=datetime.now()
+    )
+    db.add(user_msg)
+    db.commit()
+    
+    # Generate Response
+    # 1. Fetch Context (Financial Data) - Reuse logic from ask_advisor
+    # Copying context generation logic for consistency
+    try:
+        query = db.query(Transaction).filter(Transaction.user_id == user.id)
+        df = pd.read_sql(query.statement, db.bind)
+        
+        financial_context = ""
+        if not df.empty:
+            df['date'] = pd.to_datetime(df['date'])
+            total_income = df[df['amount'] > 0]['amount'].sum()
+            total_expense = df[df['amount'] < 0]['amount'].sum()
+            balance = total_income + total_expense
+            category_spending = df[df['amount'] < 0].groupby('category')['amount'].sum().abs().sort_values(ascending=False).head(5).to_dict()
+            recent_trans = df.tail(5)[['date', 'description', 'amount']].to_dict(orient='records')
+            
+            financial_context = f"""
+            FINANCIAL DATA:
+            - Balance: ₹{balance:.2f}
+            - Income: ₹{total_income:.2f}
+            - Expenses: ₹{abs(total_expense):.2f}
+            - Top Cats: {category_spending}
+            - Recent: {recent_trans}
+            """
+            
+        # 2. Fetch Chat History (Last 10 messages)
+        history_objs = db.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.timestamp).all()[-10:]
+        history = [{"role": m.role, "content": m.content} for m in history_objs]
+        
+        # 3. Call LLM
+        advice = generate_financial_advice(user_question=request.context, financial_data=financial_context, history=history)
+        
+        # Save AI Message
+        ai_msg = ChatMessage(
+            id=str(uuid.uuid4()),
+            session_id=session_id,
+            role="assistant",
+            content=advice,
+            timestamp=datetime.now()
+        )
+        db.add(ai_msg)
+        db.commit()
+        
+        # Auto-update title if it's the first real interaction
+        if session.title == "New Chat":
+            # Simple heuristic: first 4 words of user message
+            new_title = " ".join(request.context.split()[:4])
+            session.title = new_title
+            db.commit()
+
+        return {"id": ai_msg.id, "role": ai_msg.role, "content": ai_msg.content}
+        
+    except Exception as e:
+        print(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/chat/{session_id}")
+def delete_session(session_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.user_id == user.id).first()
+    if session:
+        db.delete(session)
+        db.commit()
+    return {"status": "success"}
 
 @app.get("/api/forecast")
 def get_forecast(days: int = 30, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -296,9 +459,9 @@ def generate_fallback_forecast(user, days, db):
         return [
             {
                 "date": (datetime.now() + pd.Timedelta(days=i)).strftime('%Y-%m-%d'),
-                "predicted_balance": round(current_balance, 2), # Flat line if no data
-                "upper_bound": round(current_balance, 2),
-                "lower_bound": round(current_balance, 2)
+                "predicted_balance": round(current_balance * (1 + (i * 0.001) + (np.random.normal(0, 0.005))), 2), # Slight drift + noise
+                "upper_bound": round(current_balance * 1.05, 2),
+                "lower_bound": round(current_balance * 0.95, 2)
             }
             for i in range(days)
         ]
@@ -472,19 +635,22 @@ def get_analytics(period: str = 'monthly', user: User = Depends(get_current_user
 def fraud_check(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         # Fetch Unresolved Transactions
+        # The provided snippet reads CSV then filters is_resolved != True.
+        # We can just fetch unresolved directly from DB to achieve the same data set.
         query = db.query(Transaction).filter(
             Transaction.user_id == user.id,
             Transaction.is_resolved == False
         )
         df = pd.read_sql(query.statement, db.bind)
         
+        # Check if model is available and data exists
         if df.empty or 'anomaly' not in models:
             return []
-
+            
         # Replicate Feature Engineering for Inference
         df_features = df.copy()
         
-        # 1. Z-Score (using current batch stats - ideally should use trained scaler, but batch approximation works for simple demo)
+        # 1. Z-Score (using current batch stats - as per snippet logic)
         df_features['category_mean'] = df_features.groupby('category')['amount'].transform('mean')
         df_features['category_std'] = df_features.groupby('category')['amount'].transform('std').fillna(1.0)
         df_features['amount_zscore'] = (df_features['amount'] - df_features['category_mean']) / df_features['category_std']
@@ -507,6 +673,13 @@ def fraud_check(user: User = Depends(get_current_user), db: Session = Depends(ge
         anomalies = models['anomaly'].predict(X)
         df['is_anomaly'] = anomalies
         
+        # HYBRID OVERRIDE: If rules would catch it, mark as anomaly
+        # This ensures the rules we wrote below actually get a chance to run
+        # 1. High Z-Score
+        df.loc[df_features['amount_zscore'].abs() > 3, 'is_anomaly'] = -1
+        # 2. Large Round Amounts
+        df.loc[(df_features['amount'].abs() > 1000) & (df_features['is_round'] == 1), 'is_anomaly'] = -1
+        
         # Filter suspicious
         suspicious = df[df['is_anomaly'] == -1].copy()
         
@@ -522,9 +695,6 @@ def fraud_check(user: User = Depends(get_current_user), db: Session = Depends(ge
             reasons = []
             
             # Z-Score Logic for Debits (Negative Amounts)
-            # Mean = -500. Val = -5000 (High exp) -> Z = (-5000 - -500)/std = Negative Z
-            # Mean = -500. Val = -50 (Low exp) -> Z = (-50 - -500)/std = Positive Z
-            
             if row['amount_zscore'] < -3:
                 reasons.append(f"Unusually High Amount (Z-Score: {row['amount_zscore']:.1f})")
             elif row['amount_zscore'] > 3:
@@ -541,9 +711,8 @@ def fraud_check(user: User = Depends(get_current_user), db: Session = Depends(ge
             return reasons
 
         # We need to join the zscore/round back to the suspicious df to calculate reasons
-        # But suspicious is a slice of df, so we can just use the indices or merge logic.
-        # Simplest is to map the features back since suspicious is just filtered df.
-        # df_features has the extended columns.
+        # But suspicious is a slice of df, so we can just use the indices or logic to map back.
+        # df_features has the extended columns, and shares index with df/suspicious
         suspicious_features = df_features.loc[suspicious.index]
         
         results = []
@@ -554,6 +723,10 @@ def fraud_check(user: User = Depends(get_current_user), db: Session = Depends(ge
             txn_dict['reasons'] = reasons
             # Also format description to be helpful
             txn_dict['risk_score'] = "High" if len(reasons) > 1 else "Medium"
+            # Format date for JSON
+            if isinstance(txn_dict['date'], (pd.Timestamp, datetime)):
+                txn_dict['date'] = txn_dict['date'].strftime('%Y-%m-%d')
+                
             results.append(txn_dict)
         
         return results

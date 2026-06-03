@@ -1,361 +1,51 @@
 INFO:     Will watch for changes in these directories: ['/home/prithish/DEVHACK_ASAP/Devhack_final/backend']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [208950] using StatReload
-Process SpawnProcess-1:
-Traceback (most recent call last):
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/fastapi/dependencies/utils.py", line 203, in _get_signature
-    signature = inspect.signature(call, eval_str=True)
-  File "/usr/lib/python3.14/inspect.py", line 3321, in signature
-    return Signature.from_callable(obj, follow_wrapped=follow_wrapped,
-           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                   globals=globals, locals=locals, eval_str=eval_str,
-                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                   annotation_format=annotation_format)
-                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.14/inspect.py", line 3036, in from_callable
-    return _signature_from_callable(obj, sigcls=cls,
-                                    follow_wrapper_chains=follow_wrapped,
-                                    globals=globals, locals=locals, eval_str=eval_str,
-                                    annotation_format=annotation_format)
-  File "/usr/lib/python3.14/inspect.py", line 2511, in _signature_from_callable
-    return _signature_from_function(sigcls, obj,
-                                    skip_bound_arg=skip_bound_arg,
-                                    globals=globals, locals=locals, eval_str=eval_str,
-                                    annotation_format=annotation_format)
-  File "/usr/lib/python3.14/inspect.py", line 2334, in _signature_from_function
-    annotations = get_annotations(func, globals=globals, locals=locals, eval_str=eval_str,
-                                  format=annotation_format)
-  File "/usr/lib/python3.14/annotationlib.py", line 957, in get_annotations
-    ann = _get_dunder_annotations(obj)
-  File "/usr/lib/python3.14/annotationlib.py", line 1137, in _get_dunder_annotations
-    ann = getattr(obj, "__annotations__", None)
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/main.py", line 565, in __annotate__
-    def resolve_fraud(request: ResolveRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-                               ^^^^^^^^^^^^^^
-NameError: name 'ResolveRequest' is not defined
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/usr/lib/python3.14/multiprocessing/process.py", line 320, in _bootstrap
-    self.run()
-    ~~~~~~~~^^
-  File "/usr/lib/python3.14/multiprocessing/process.py", line 108, in run
-    self._target(*self._args, **self._kwargs)
-    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/uvicorn/_subprocess.py", line 80, in subprocess_started
-    target(sockets=sockets)
-    ~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/uvicorn/server.py", line 67, in run
-    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
-  File "/usr/lib/python3.14/asyncio/runners.py", line 204, in run
-    return runner.run(main)
-           ~~~~~~~~~~^^^^^^
-  File "/usr/lib/python3.14/asyncio/runners.py", line 127, in run
-    return self._loop.run_until_complete(task)
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
-  File "/usr/lib/python3.14/asyncio/base_events.py", line 719, in run_until_complete
-    return future.result()
-           ~~~~~~~~~~~~~^^
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/uvicorn/server.py", line 71, in serve
-    await self._serve(sockets)
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/uvicorn/server.py", line 78, in _serve
-    config.load()
-    ~~~~~~~~~~~^^
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/uvicorn/config.py", line 439, in load
-    self.loaded_app = import_from_string(self.app)
-                      ~~~~~~~~~~~~~~~~~~^^^^^^^^^^
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/uvicorn/importer.py", line 19, in import_from_string
-    module = importlib.import_module(module_str)
-  File "/usr/lib/python3.14/importlib/__init__.py", line 88, in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
-  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
-  File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
-  File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
-  File "<frozen importlib._bootstrap_external>", line 759, in exec_module
-  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/main.py", line 564, in <module>
-    @app.post("/api/resolve-fraud")
-     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 1063, in decorator
-    self.add_api_route(
-    ~~~~~~~~~~~~~~~~~~^
-        path,
-        ^^^^^
-    ...<23 lines>...
-        generate_unique_id_function=generate_unique_id_function,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 1002, in add_api_route
-    route = route_class(
-        self.prefix + path,
-    ...<24 lines>...
-        generate_unique_id_function=current_generate_unique_id,
-    )
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 523, in __init__
-    return_annotation = get_typed_return_annotation(endpoint)
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/fastapi/dependencies/utils.py", line 240, in get_typed_return_annotation
-    signature = _get_signature(call)
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/venv/lib/python3.14/site-packages/fastapi/dependencies/utils.py", line 207, in _get_signature
-    signature = inspect.signature(call)
-  File "/usr/lib/python3.14/inspect.py", line 3321, in signature
-    return Signature.from_callable(obj, follow_wrapped=follow_wrapped,
-           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                   globals=globals, locals=locals, eval_str=eval_str,
-                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                   annotation_format=annotation_format)
-                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.14/inspect.py", line 3036, in from_callable
-    return _signature_from_callable(obj, sigcls=cls,
-                                    follow_wrapper_chains=follow_wrapped,
-                                    globals=globals, locals=locals, eval_str=eval_str,
-                                    annotation_format=annotation_format)
-  File "/usr/lib/python3.14/inspect.py", line 2511, in _signature_from_callable
-    return _signature_from_function(sigcls, obj,
-                                    skip_bound_arg=skip_bound_arg,
-                                    globals=globals, locals=locals, eval_str=eval_str,
-                                    annotation_format=annotation_format)
-  File "/usr/lib/python3.14/inspect.py", line 2334, in _signature_from_function
-    annotations = get_annotations(func, globals=globals, locals=locals, eval_str=eval_str,
-                                  format=annotation_format)
-  File "/usr/lib/python3.14/annotationlib.py", line 957, in get_annotations
-    ann = _get_dunder_annotations(obj)
-  File "/usr/lib/python3.14/annotationlib.py", line 1137, in _get_dunder_annotations
-    ann = getattr(obj, "__annotations__", None)
-  File "/home/prithish/DEVHACK_ASAP/Devhack_final/backend/main.py", line 565, in __annotate__
-    def resolve_fraud(request: ResolveRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-                               ^^^^^^^^^^^^^^
-NameError: name 'ResolveRequest' is not defined
-WARNING:  StatReload detected changes in 'main.py'. Reloading...
-INFO:     Started server process [209163]
+INFO:     Started reloader process [236940] using StatReload
+INFO:     Started server process [236942]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Will watch for changes in these directories: ['/home/prithish/DEVHACK_ASAP/Devhack_final/backend']
-ERROR:    [Errno 98] Address already in use
-INFO:     127.0.0.1:40966 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40998 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41002 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41004 - "GET /api/stats HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:40950 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41008 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40962 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40982 - "GET /api/transactions HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:41022 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41038 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41046 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41056 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44448 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44456 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43836 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43852 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43858 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43866 - "GET /api/stats HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:43816 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43846 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43880 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43822 - "GET /api/health HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:43884 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43916 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43900 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43918 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55698 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55700 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34930 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34942 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34952 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34954 - "GET /api/stats HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:34926 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34966 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34938 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34928 - "GET /api/health HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:34978 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34988 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35010 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35002 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43910 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43928 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43930 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43940 - "GET /api/stats HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:43892 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43922 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43896 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43944 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:43946 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43978 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43956 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43962 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44008 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44018 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44024 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44032 - "GET /api/stats HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:43980 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44044 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43994 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44012 - "GET /api/transactions HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:44048 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44060 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44074 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44068 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54570 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54592 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54598 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54604 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54562 - "GET /api/health HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:54560 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54576 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54620 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:54638 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54640 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54622 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54648 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Forecast ML error: name 'models' is not defined
-INFO:     127.0.0.1:48336 - "GET /api/forecast?days=30 HTTP/1.1" 200 OK
-Forecast ML error: name 'models' is not defined
-INFO:     127.0.0.1:48348 - "GET /api/forecast?days=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44926 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44952 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44954 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44970 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44936 - "GET /api/transactions HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:44898 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44910 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44972 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44982 - "GET /api/transactions HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:44996 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:45014 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:45010 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36110 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36126 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36140 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36146 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36112 - "GET /api/transactions HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:36104 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36108 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36158 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36174 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36204 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36188 - "GET /api/health HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:36178 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47492 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47508 - "GET /api/transactions HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:59370 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59396 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59424 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59434 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59446 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59460 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59474 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59468 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59490 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59498 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59504 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59512 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59514 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59518 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59534 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59536 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59546 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59548 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59554 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59552 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59560 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59564 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59578 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59590 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59602 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59380 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59408 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59456 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:59428 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59612 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59624 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59636 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:59646 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59660 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59752 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59742 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59756 - "GET /api/budget HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59780 - "GET /api/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59664 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59674 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:59678 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59792 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:59704 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59682 - "GET /api/health HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:59696 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59772 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59718 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59804 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59732 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59808 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:59818 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59826 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39446 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39462 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39468 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39484 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:39492 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39510 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39506 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39518 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:39520 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39548 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39528 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39542 - "GET /api/health HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:39562 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39566 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39572 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39578 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39596 - "GET /api/transactions HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:39580 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39584 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39606 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39608 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39626 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:39620 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39634 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39632 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39640 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:39646 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39670 - "GET /api/analytics?period=monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39658 - "GET /api/health HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:39682 - "GET /api/fraud-check HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39652 - "GET /api/transactions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39692 - "GET /api/health HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:43628 - "GET /api/fraud-check HTTP/1.1" 200 OK
-Fraud check error: name 'models' is not defined
-INFO:     127.0.0.1:43632 - "GET /api/fraud-check HTTP/1.1" 200 OK
+ML Models loaded successfully
+INFO:     127.0.0.1:47484 - "POST /api/seed-anomaly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47490 - "GET /api/fraud-check HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [236942]
+INFO:     Started server process [239229]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ML Models loaded successfully
+DEBUG: Total transactions fetched: 4991
+DEBUG: Anomalies detected by model: 50
+DEBUG: Seeded txn found. Prediction: [1]
+DEBUG: Features:        amount  amount_zscore  is_weekend  is_round
+4990 -50000.0     -19.546947           1         1
+INFO:     127.0.0.1:51154 - "GET /api/fraud-check HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [239229]
+INFO:     Started server process [240326]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ML Models loaded successfully
+Fraud check error: 'amount_zscore'
+INFO:     127.0.0.1:45948 - "GET /api/fraud-check HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [240326]
+INFO:     Started server process [240893]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ML Models loaded successfully
+INFO:     127.0.0.1:45972 - "GET /api/fraud-check HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44702 - "GET /api/fraud-check HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [240893]
+INFO:     Stopping reloader process [236940]

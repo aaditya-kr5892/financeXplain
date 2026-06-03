@@ -9,6 +9,8 @@ import Login from './components/Login';
 import Forecast from './components/Forecast';
 import Preloader from './components/Preloader';
 import FraudList from './components/FraudList';
+import Modal from './components/Modal';
+import ManualEntry from './components/ManualEntry';
 
 // Initialize auth header to prevent race conditions with child components
 const savedUser = localStorage.getItem('fintech_user');
@@ -21,17 +23,36 @@ function App() {
     const [user, setUser] = useState(localStorage.getItem('fintech_user'));
     const [appLoading, setAppLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isEntryOpen, setIsEntryOpen] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    // Lifted State for Fraud Data (Prevents reloading on nav change)
+    const [fraudData, setFraudData] = useState([]);
+    const [fraudLoading, setFraudLoading] = useState(true);
 
     useEffect(() => {
         if (user) {
             // Set header for all requests
             axios.defaults.headers.common['X-User-ID'] = user;
             localStorage.setItem('fintech_user', user);
+            fetchFraudData();
         } else {
             delete axios.defaults.headers.common['X-User-ID'];
             localStorage.removeItem('fintech_user');
         }
-    }, [user]);
+    }, [user, refreshKey]); // Re-fetch on user change or global refresh
+
+    const fetchFraudData = async () => {
+        setFraudLoading(true);
+        try {
+            const res = await axios.get('/api/fraud-check');
+            setFraudData(res.data);
+        } catch (err) {
+            console.error("Failed to fetch fraud data", err);
+        } finally {
+            setFraudLoading(false);
+        }
+    };
 
     const handleLogout = () => {
         setUser(null);
@@ -44,7 +65,12 @@ function App() {
     const renderContent = () => {
         switch (activeTab) {
             case 'dashboard':
-                return <Dashboard setActiveTab={setActiveTab} />;
+                return <Dashboard
+                    setActiveTab={setActiveTab}
+                    refreshTrigger={refreshKey}
+                    fraudData={fraudData}
+                    fraudLoading={fraudLoading}
+                />;
             case 'transactions':
                 return <Transactions />;
             case 'insights':
@@ -52,7 +78,12 @@ function App() {
             case 'forecast':
                 return <Forecast />;
             case 'fraud': // New route
-                return <FraudList setActiveTab={setActiveTab} />;
+                return <FraudList
+                    setActiveTab={setActiveTab}
+                    fraudData={fraudData}
+                    loading={fraudLoading}
+                    refetch={fetchFraudData}
+                />;
             default:
                 return <Dashboard />;
         }
@@ -89,7 +120,7 @@ function App() {
                                 Sign Out
                             </button>
                             <button
-                                onClick={() => document.getElementById('file-upload-section').scrollIntoView({ behavior: 'smooth' })} // Maintain functionality
+                                onClick={() => setIsEntryOpen(true)}
                                 className="bg-corporate-primary hover:bg-purple-700 text-white px-5 py-2 rounded-md font-medium transition-all shadow-sm flex items-center gap-2 text-sm"
                             >
                                 + New Entry
@@ -100,6 +131,14 @@ function App() {
                     {renderContent()}
                 </div>
             </main>
+
+            {/* Global Entry Modal */}
+            <Modal isOpen={isEntryOpen} onClose={() => setIsEntryOpen(false)} title="New Transaction">
+                <ManualEntry onTransactionAdded={() => {
+                    setRefreshKey(k => k + 1);
+                    setIsEntryOpen(false);
+                }} />
+            </Modal>
         </div>
     );
 }

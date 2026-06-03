@@ -2,13 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertCircle, TrendingUp, DollarSign, Activity, Target } from 'lucide-react';
 import axios from 'axios';
-import ManualEntry from './ManualEntry';
 import Budget from './Budget';
 import FinancialHealth from './FinancialHealth';
 import ImpactSimulator from './ImpactSimulator';
 import FraudAlerts from './FraudAlerts';
 
-const Dashboard = ({ setActiveTab }) => {
+const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) => {
     const [stats, setStats] = useState({ income: 0, expense: 0, balance: 0 });
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -31,7 +30,7 @@ const Dashboard = ({ setActiveTab }) => {
             }
         };
         fetchData();
-    }, [refreshKey, period]);
+    }, [refreshKey, period, refreshTrigger]);
 
     const handleReportDownload = async (type) => {
         const range = document.getElementById('report-range').value;
@@ -104,11 +103,11 @@ const Dashboard = ({ setActiveTab }) => {
             {/* Main Content Grid: Bento Box Style */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-                {/* Column 1: Actions & Context (Left Sidebar feel) */}
+                {/* Column 1: Health & Simulator (Left Sidebar) */}
                 <div className="lg:col-span-1 space-y-6">
-                    {/* Quick Entry */}
+                    {/* Financial Health */}
                     <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm">
-                        <ManualEntry onTransactionAdded={() => setRefreshKey(k => k + 1)} />
+                        <FinancialHealth />
                     </div>
 
                     {/* Simulator */}
@@ -121,7 +120,7 @@ const Dashboard = ({ setActiveTab }) => {
                 <div className="lg:col-span-2 space-y-6">
                     {/* Fraud Alerts (Central Priority) */}
                     <div className="w-full">
-                        <FraudAlerts setActiveTab={setActiveTab} />
+                        <FraudAlerts setActiveTab={setActiveTab} anomalies={fraudData} loading={fraudLoading} />
                     </div>
 
                     {/* Main Chart */}
@@ -176,13 +175,9 @@ const Dashboard = ({ setActiveTab }) => {
 
                 </div>
 
-                {/* Column 4: Insights & Health (Right Sidebar) */}
+                {/* Column 4: Budget & Reports (Right Sidebar) */}
                 <div className="lg:col-span-1 space-y-6">
-                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 shadow-sm">
-                        <FinancialHealth />
-                    </div>
-
-                    {/* Budget moved here for symmetry */}
+                    {/* Budget */}
                     <div className="bg-corporate-card border border-corporate-border rounded-lg p-6 shadow-sm">
                         <Budget />
                     </div>

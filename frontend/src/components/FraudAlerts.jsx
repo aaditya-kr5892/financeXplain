@@ -2,23 +2,10 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { AlertTriangle, ShieldAlert, CheckCircle } from 'lucide-react';
 
-const FraudAlerts = ({ setActiveTab }) => {
-    const [anomalies, setAnomalies] = useState([]);
-    const [loading, setLoading] = useState(true);
+const FraudAlerts = ({ setActiveTab, anomalies = [], loading = false }) => {
 
-    useEffect(() => {
-        const checkFraud = async () => {
-            try {
-                const res = await axios.get('/api/fraud-check');
-                setAnomalies(res.data);
-            } catch (err) {
-                console.error("Fraud check failed", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        checkFraud();
-    }, []);
+    // Internal fetching removed to prevent reloads.
+    // Data is now passed from App.jsx -> Dashboard.jsx -> FraudAlerts.jsx
 
     if (loading) return null;
 

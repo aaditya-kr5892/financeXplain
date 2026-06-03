@@ -35,7 +35,7 @@ const Preloader = ({ setLoading }) => {
                 className="loader-video"
                 onError={(e) => console.error("Video failed to load", e)}
             >
-                <source src="/loader.mp4" type="video/mp4" />
+                <source src="/loader.webm" type="video/webm" />
             </video>
 
             <div className="loading-text-overlay">

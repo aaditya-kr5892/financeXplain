@@ -2,28 +2,20 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { ShieldAlert, CheckCircle, Search, AlertTriangle, ArrowLeft } from 'lucide-react';
 
-const FraudList = ({ setActiveTab }) => {
-    const [anomalies, setAnomalies] = useState([]);
-    const [loading, setLoading] = useState(true);
+const FraudList = ({ setActiveTab, fraudData, loading, refetch }) => {
+    // Local state only for immediate UI updates before refetch
+    // But better to rely on props if we want single source of truth.
+    // However, for better UX (optimistic update), we can just call refetch.
 
-    useEffect(() => {
-        const fetchFraud = async () => {
-            try {
-                const res = await axios.get('/api/fraud-check');
-                setAnomalies(res.data);
-            } catch (err) {
-                console.error("Failed to fetch fraud list", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchFraud();
-    }, []);
+    // We don't need local state for anomalies if we use props.fraudData
+    // But we might want to filter locally? Let's just use the prop.
+    const anomalies = fraudData || [];
 
     const handleResolve = async (id) => {
         try {
             await axios.post('/api/resolve-fraud', { transaction_id: id });
-            setAnomalies(prev => prev.filter(a => a.id !== id));
+            // Refresh global data
+            if (refetch) refetch();
         } catch (err) {
             console.error("Failed to resolve fraud", err);
             alert("Failed to resolve alert. Please try again.");
@@ -94,9 +86,12 @@ const FraudList = ({ setActiveTab }) => {
                                             {txn.reasons && txn.reasons.join(", ")}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <span className="px-2 py-1 rounded text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                                            HIGH RISK
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className={`px-2 py-1 rounded text-xs font-bold border ${txn.risk_level === 'Critical' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' :
+                                                txn.risk_level === 'High' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                                                    'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                                            }`}>
+                                            {(txn.risk_level || 'HIGH RISK').toUpperCase()}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right font-bold text-rose-400">
