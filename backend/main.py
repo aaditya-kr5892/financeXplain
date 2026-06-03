@@ -10,11 +10,14 @@ from typing import List, Optional
 from llm_service import generate_financial_advice
 import uuid
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, extract
 from database import get_db, engine, Base
-from models import User, Transaction, Budget, ChatSession, ChatMessage, ExpenseGroup, GroupMember, SharedExpense, ExpenseSplit, RecurringPayment, PaymentNotification
+from models import User, Transaction, Budget, ChatSession, ChatMessage, ExpenseGroup, GroupMember, SharedExpense, ExpenseSplit, RecurringPayment, PaymentNotification, Asset, PortfolioSnapshot, InvestmentGoal, RiskProfile
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
+import yfinance as yf
+import json
+import requests
 
 # Create Tables (if not exist)
 # Create Tables (if not exist)
@@ -95,24 +98,55 @@ def login(user: UserAuth, db: Session = Depends(get_db)):
 
 async def get_current_user_obj(x_user_id: Optional[str] = Header(None), db: Session = Depends(get_db)):
     if not x_user_id:
-        raise HTTPException(status_code=401, detail="X-User-ID header missing")
+        # For testing, fallback to first user if no header (DevHack only)
+        # return db.query(User).first()
+        raise HTTPException(status_code=401, detail="Missing X-User-ID header")
     
     user = db.query(User).filter(User.username == x_user_id).first()
     if not user:
-         raise HTTPException(status_code=401, detail="User not found")
+        raise HTTPException(status_code=401, detail="Invalid user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
     return user
 
-# --- DATA ENDPOINTS ---
-
-# Dependency to get current user object
 async def get_current_user(x_user_id: Optional[str] = Header(None), db: Session = Depends(get_db)):
-    if not x_user_id:
-        raise HTTPException(status_code=401, detail="X-User-ID header missing")
+    return await get_current_user_obj(x_user_id, db)
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+@app.put("/api/user/profile")
+async def update_profile(data: UserUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if data.username and data.username != user.username:
+        exist = db.query(User).filter(User.username == data.username).first()
+        if exist:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        user.username = data.username
     
-    user = db.query(User).filter(User.username == x_user_id).first()
-    if not user:
-         raise HTTPException(status_code=401, detail="User not found")
-    return user
+    if data.password:
+        user.password_hash = hash_password(data.password)
+        
+    db.commit()
+    db.refresh(user)
+    return {"status": "success", "user": {"id": user.id, "username": user.username}, "new_token": user.username}
+
+@app.delete("/api/user/profile")
+async def delete_profile(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        # Manual Cascade Delete
+        db.query(Transaction).filter(Transaction.user_id == user.id).delete()
+        db.query(Budget).filter(Budget.user_id == user.id).delete()
+        db.query(Asset).filter(Asset.user_id == user.id).delete()
+        db.query(RecurringPayment).filter(RecurringPayment.user_id == user.id).delete()
+        # Add others as needed or rely on cascade if set. 
+        # Attempting main delete
+        db.delete(user)
+        db.commit()
+        return {"status": "success", "message": "Account deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 # -- SEED DATA FOR DEMO --
 @app.post("/api/seed-anomaly")
@@ -208,30 +242,56 @@ def get_transactions(user: User = Depends(get_current_user), db: Session = Depen
 
 @app.get("/api/stats")
 def get_stats(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Use SQL aggregation for efficiency
-    # But for simplicity/speed now, fetch all and sum (or use query funcs)
-    # transactions = db.query(Transaction).filter(Transaction.user_id == user.id).all()
-    # Pushing sum to DB is better:
+    from sqlalchemy import func, extract
     
-    from sqlalchemy import func
+    today = datetime.now()
+    curr_month = today.month
+    curr_year = today.year
     
-    total_income = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.user_id == user.id, 
-        Transaction.category == 'Income'
-    ).scalar() or 0.0
+    # Helper to sum
+    def get_sum(category_filter, extra_filters=None):
+        q = db.query(func.sum(Transaction.amount)).filter(Transaction.user_id == user.id)
+        if category_filter == 'Income':
+            q = q.filter(Transaction.category == 'Income')
+        else:
+            q = q.filter(Transaction.category != 'Income')
+            
+        if extra_filters:
+            for f in extra_filters:
+                q = q.filter(f)
+        return q.scalar() or 0.0
+
+    # All Time
+    all_income = get_sum('Income')
+    all_expense = get_sum('Expense')
     
-    # Expense is non-Income
-    total_expense = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.user_id == user.id, 
-        Transaction.category != 'Income'
-    ).scalar() or 0.0
+    # Monthly
+    month_filters = [extract('month', Transaction.date) == curr_month, extract('year', Transaction.date) == curr_year]
+    month_income = get_sum('Income', month_filters)
+    month_expense = get_sum('Expense', month_filters)
     
-    balance = total_income + total_expense
+    # Yearly
+    year_filters = [extract('year', Transaction.date) == curr_year]
+    year_income = get_sum('Income', year_filters)
+    year_expense = get_sum('Expense', year_filters)
+
+    balance = all_income + all_expense
     
     return {
-        "income": round(total_income, 2),
-        "expense": round(total_expense, 2),
-        "balance": round(balance, 2)
+        "balance": round(balance, 2),
+        "credit": {
+            "monthly": round(month_income, 2),
+            "yearly": round(year_income, 2),
+            "all_time": round(all_income, 2)
+        },
+        "debit": {
+            "monthly": round(month_expense, 2),
+            "yearly": round(year_expense, 2),
+            "all_time": round(all_expense, 2)
+        },
+        # Legacy support if needed, or remove? I'll support old keys temporarily if needed but preferably I update frontend
+        "income": round(all_income, 2), 
+        "expense": round(all_expense, 2)
     }
 
 class AdviceRequest(BaseModel):
@@ -1753,3 +1813,304 @@ def get_due_payments(
     except Exception as e:
         print(f"Error fetching due payments: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== WEALTH MANAGEMENT APIs ====================
+
+class AssetCreate(BaseModel):
+    name: str
+    symbol: Optional[str] = None
+    type: str
+    quantity: float
+    purchase_price: Optional[float] = None
+    current_price: Optional[float] = None
+    purchase_date: str # YYYY-MM-DD
+
+class AssetUpdate(BaseModel):
+    name: Optional[str] = None
+    symbol: Optional[str] = None
+    type: Optional[str] = None
+    quantity: Optional[float] = None
+    purchase_price: Optional[float] = None
+    current_price: Optional[float] = None
+    purchase_date: Optional[str] = None
+
+@app.get("/api/assets")
+def get_assets(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(Asset).filter(Asset.user_id == user.id).all()
+
+@app.post("/api/assets")
+def create_asset(asset: AssetCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        current_price = asset.current_price
+        metrics_json = None
+
+        # Auto-fetch price if symbol provided and no price given (or if user wants auto)
+        if asset.symbol:
+            try:
+                print(f"Fetching data for {asset.symbol}")
+                ticker = yf.Ticker(asset.symbol)
+                
+                # 1. Current Price
+                if current_price is None or current_price == 0:
+                    hist = ticker.history(period="1d")
+                    if not hist.empty:
+                        current_price = float(hist['Close'].iloc[-1])
+                        print(f"Fetched current price: {current_price}")
+
+                # 2. Purchase Price (Historical)
+                if asset.purchase_price is None or asset.purchase_price == 0:
+                    try:
+                        p_date = datetime.strptime(asset.purchase_date, "%Y-%m-%d")
+                        # Fetch range to handle weekends/holidays (e.g. 5 days window)
+                        hist_past = ticker.history(start=asset.purchase_date, end=(p_date + timedelta(days=5)).strftime("%Y-%m-%d"))
+                        if not hist_past.empty:
+                            asset.purchase_price = float(hist_past['Close'].iloc[0])
+                            print(f"Fetched historical price: {asset.purchase_price}")
+                    except Exception as he:
+                        print(f"Historical fetch failed: {he}")
+
+                # 3. Metrics
+                try:
+                    info = ticker.info
+                    metrics_data = {
+                        "pe": info.get('trailingPE'),
+                        "market_cap": info.get('marketCap'),
+                        "high_52w": info.get('fiftyTwoWeekHigh'),
+                        "low_52w": info.get('fiftyTwoWeekLow'),
+                        "dividend_yield": info.get('dividendYield'),
+                        "currency": info.get('currency'),
+                        "lot_size": info.get('lotSize', 1),
+                        "previous_close": info.get('previousClose') or info.get('regularMarketPreviousClose')
+                    }
+                    metrics_json = json.dumps(metrics_data)
+                except Exception as me:
+                    print(f"Metrics fetch failed: {me}")
+                    metrics_json = None
+
+            except Exception as e:
+                print(f"Failed to fetch stock data: {e}")
+                if current_price is None: current_price = 0
+                metrics_json = None
+
+        purchase_date = datetime.strptime(asset.purchase_date, "%Y-%m-%d").date()
+        new_asset = Asset(
+            user_id=user.id,
+            name=asset.name,
+            symbol=asset.symbol,
+            type=asset.type,
+            quantity=asset.quantity,
+            purchase_price=asset.purchase_price or 0,
+            current_price=current_price or 0,
+            purchase_date=purchase_date,
+            metrics=metrics_json
+        )
+        db.add(new_asset)
+        db.commit()
+        db.refresh(new_asset)
+        return new_asset
+    except Exception as e:
+        with open("error_log.txt", "a") as f:
+            f.write(f"Error creating asset: {str(e)}\n")
+        print(f"Error creating asset: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/assets/refresh-prices")
+def refresh_asset_prices(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    assets = db.query(Asset).filter(Asset.user_id == user.id, Asset.symbol != None).all()
+    updated_count = 0
+    errors = []
+    
+    for asset in assets:
+        try:
+            ticker = yf.Ticker(asset.symbol)
+            hist = ticker.history(period="1d")
+            if not hist.empty:
+                new_price = float(hist['Close'].iloc[-1])
+                asset.current_price = new_price
+                
+                # Fetch Metrics
+                try:
+                    info = ticker.info
+                    metrics_data = {
+                        "pe": info.get('trailingPE'),
+                        "market_cap": info.get('marketCap'),
+                        "high_52w": info.get('fiftyTwoWeekHigh'),
+                        "low_52w": info.get('fiftyTwoWeekLow'),
+                        "dividend_yield": info.get('dividendYield'),
+                        "currency": info.get('currency'),
+                        "lot_size": info.get('lotSize', 1),
+                        "previous_close": info.get('previousClose') or info.get('regularMarketPreviousClose')
+                    }
+                    asset.metrics = json.dumps(metrics_data)
+                except Exception as me:
+                    print(f"Metrics fetch failed for {asset.symbol}: {me}")
+
+                updated_count += 1
+        except Exception as e:
+            errors.append(f"{asset.symbol}: {str(e)}")
+            
+    db.commit()
+    return {"message": f"Updated {updated_count} assets", "errors": errors}
+
+@app.put("/api/assets/{asset_id}")
+def update_asset(asset_id: int, asset: AssetUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_asset = db.query(Asset).filter(Asset.id == asset_id, Asset.user_id == user.id).first()
+    if not db_asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    if asset.name: db_asset.name = asset.name
+    if asset.type: db_asset.type = asset.type
+    if asset.quantity is not None: db_asset.quantity = asset.quantity
+    if asset.purchase_price is not None: db_asset.purchase_price = asset.purchase_price
+    if asset.current_price is not None: db_asset.current_price = asset.current_price
+    if asset.purchase_date:
+        db_asset.purchase_date = datetime.strptime(asset.purchase_date, "%Y-%m-%d").date()
+        
+    db.commit()
+    db.refresh(db_asset)
+    return db_asset
+
+@app.delete("/api/assets/{asset_id}")
+def delete_asset(asset_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_asset = db.query(Asset).filter(Asset.id == asset_id, Asset.user_id == user.id).first()
+    if not db_asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    db.delete(db_asset)
+    db.commit()
+    return {"message": "Asset deleted"}
+
+@app.get("/api/net-worth")
+def get_net_worth(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        assets = db.query(Asset).filter(Asset.user_id == user.id).all()
+        
+        # Fetch generic USD-INR rate (cached slightly or just fetched)
+        # For simplicity, fetching real-time. Optimization: Cache this.
+        usd_inr = 86.0 
+        try:
+            er = yf.Ticker("USDINR=X").history(period="1d")
+            if not er.empty:
+               usd_inr = float(er['Close'].iloc[-1])
+        except: pass
+
+        total_assets = 0
+        breakdown = {}
+        
+        for a in assets:
+            price = a.current_price or 0
+            qty = a.quantity or 0
+            val_in_native = price * qty
+            
+            # Conversion
+            val_inr = val_in_native
+            try:
+                if a.metrics:
+                    m = json.loads(a.metrics)
+                    curr = m.get('currency', 'INR')
+                    if curr == 'USD':
+                        val_inr = val_in_native * usd_inr
+                    # Add other currencies if needed (EUR, etc.)
+            except: pass
+            
+            total_assets += val_inr
+            breakdown[a.type] = breakdown.get(a.type, 0) + val_inr
+            
+        return {
+            "total_net_worth": total_assets,
+            "currency": "INR",
+            "breakdown": breakdown
+        }
+    except Exception as e:
+        print(f"Error fetching net worth: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== RISK PROFILE APIs ====================
+
+class RiskProfileCreate(BaseModel):
+    score: int
+    profile_type: str
+    answers: str # JSON string
+
+@app.get("/api/risk-profile")
+def get_risk_profile(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(RiskProfile).filter(RiskProfile.user_id == user.id).first()
+
+@app.post("/api/risk-profile")
+def create_or_update_risk_profile(profile: RiskProfileCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        db_profile = db.query(RiskProfile).filter(RiskProfile.user_id == user.id).first()
+        if db_profile:
+            db_profile.score = profile.score
+            db_profile.profile_type = profile.profile_type
+            db_profile.answers = profile.answers
+            db.commit()
+            db.refresh(db_profile)
+            return db_profile
+        else:
+            new_profile = RiskProfile(
+                user_id=user.id,
+                score=profile.score,
+                profile_type=profile.profile_type,
+                answers=profile.answers
+            )
+            db.add(new_profile)
+            db.commit()
+            db.refresh(new_profile)
+            return new_profile
+    except Exception as e:
+        print(f"Error saving risk profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== STOCK SEARCH API ====================
+
+@app.get("/api/stocks/search")
+def search_stocks(q: str):
+    try:
+        if not q or len(q) < 1: return []
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        url = "https://query2.finance.yahoo.com/v1/finance/search"
+        params = {
+            'q': q,
+            'quotesCount': 10,
+            'newsCount': 0,
+            'enableFuzzyQuery': False,
+            'quotesQueryId': 'tss_match_phrase_query'
+        }
+        r = requests.get(url, params=params, headers=headers)
+        if r.status_code == 200:
+            data = r.json()
+            return data.get('quotes', [])
+        return []
+    except Exception as e:
+        print(f"Search error: {e}")
+        return []
+
+@app.get("/api/stocks/{symbol}/history")
+def get_stock_history(symbol: str, period: str = "1mo"):
+    try:
+        ticker = yf.Ticker(symbol)
+        interval = "1d"
+        if period == "1d": interval = "5m"
+        elif period == "5d": interval = "15m"
+        
+        hist = ticker.history(period=period, interval=interval)
+        data = []
+        for index, row in hist.iterrows():
+            data.append({
+                "date": index.isoformat(),
+                "price": row['Close']
+            })
+        return data
+    except Exception as e:
+        print(f"History error: {e}")
+        return []
+
+@app.get("/api/stocks/{symbol}/news")
+def get_stock_news(symbol: str):
+    try:
+        ticker = yf.Ticker(symbol)
+        return ticker.news
+    except Exception as e:
+        print(f"News error: {e}")
+        return []

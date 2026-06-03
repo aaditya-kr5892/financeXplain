@@ -4,6 +4,7 @@ export default {
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
     ],
+    darkMode: 'class',
     theme: {
         extend: {
             fontFamily: {
@@ -11,15 +12,15 @@ export default {
             },
             colors: {
                 corporate: {
-                    bg: '#111116',
-                    card: '#1F1F26',
-                    border: '#2D2D35',
-                    primary: '#7F56D9', // Purple
-                    accent: '#00B7C3',  // Teal
+                    bg: 'var(--bg-corporate)',
+                    card: 'var(--card-corporate)',
+                    border: 'var(--border-corporate)',
+                    primary: 'var(--primary-corporate)',
+                    accent: 'var(--accent-corporate)',
                     text: {
-                        main: '#FFFFFF',
-                        secondary: '#A1A1AA',
-                        muted: '#71717A'
+                        main: 'var(--text-main)',
+                        secondary: 'var(--text-secondary)',
+                        muted: 'var(--text-muted)'
                     }
                 }
             },

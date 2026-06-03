@@ -5,12 +5,30 @@
 @tailwind utilities;
 
 :root {
+  /* Default to Light Mode */
+  --bg-corporate: #F3F4F6;
+  --card-corporate: #FFFFFF;
+  --border-corporate: #E5E7EB;
+  --primary-corporate: #7F56D9;
+  --accent-corporate: #00B7C3;
+  --text-main: #111827;
+  --text-secondary: #4B5563;
+  --text-muted: #9CA3AF;
+  --bg-dark: #FFFFFF;
+  /* Scrollbar track light */
+}
+
+.dark {
   --bg-corporate: #111116;
   --card-corporate: #1F1F26;
+  --border-corporate: #2D2D35;
   --primary-corporate: #7F56D9;
   --accent-corporate: #00B7C3;
   --text-main: #FFFFFF;
   --text-secondary: #A1A1AA;
+  --text-muted: #71717A;
+  --bg-dark: #111116;
+  /* Scrollbar track dark */
 }
 
 body {

@@ -13,6 +13,9 @@ import Modal from './components/Modal';
 import ManualEntry from './components/ManualEntry';
 import SplitBill from './components/SplitBill';
 import RecurringPayments from './components/RecurringPayments';
+import Assets from './components/Assets';
+import WealthImpact from './components/WealthImpact';
+import Risk from './components/Risk';
 
 // Initialize auth header to prevent race conditions with child components
 const savedUser = localStorage.getItem('fintech_user');
@@ -90,6 +93,12 @@ function App() {
                     loading={fraudLoading}
                     refetch={fetchFraudData}
                 />;
+            case 'assets':
+                return <Assets />;
+            case 'wealth_impact':
+                return <WealthImpact />;
+            case 'risk':
+                return <Risk />;
             default:
                 return <Dashboard />;
         }

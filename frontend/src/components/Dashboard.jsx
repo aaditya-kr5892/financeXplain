@@ -11,8 +11,11 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
     const [stats, setStats] = useState({ income: 0, expense: 0, balance: 0 });
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
+
     const [refreshKey, setRefreshKey] = useState(0);
-    const [period, setPeriod] = useState('monthly');
+
+    const [period, setPeriod] = useState('monthly'); // For Chart
+    const [overviewPeriod, setOverviewPeriod] = useState('monthly'); // For Cards
     const [downloading, setDownloading] = useState({ analysis: false, statement: false });
 
     useEffect(() => {
@@ -72,37 +75,60 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
         <div className="bg-corporate-bg min-h-full font-sans text-corporate-text-main p-6 animate-in fade-in zoom-in duration-300">
 
             {/* Top Row: KPI Cards Strip (Minimalist) */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <KPICard
-                    title="Net Position"
-                    amount={stats.balance}
-                    icon={Wallet}
-                    trend={12.5}
-                    isCurrency
-                />
-                <KPICard
-                    title="Total Revenue"
-                    amount={stats.income}
-                    icon={DollarSign}
-                    trend={8.2}
-                    isPositive
-                    isCurrency
-                />
-                <KPICard
-                    title="Total Spend"
-                    amount={Math.abs(stats.expense)}
-                    icon={Activity}
-                    trend={-2.4}
-                    isPositive={false}
-                    isCurrency
-                />
-                <KPICard
-                    title="Savings Rate"
-                    amount={`${stats.income ? Math.round(((stats.income - Math.abs(stats.expense)) / stats.income) * 100) : 0}%`}
-                    icon={Target}
-                    trend={1.2}
-                    isPositive
-                />
+            <div className="flex flex-col gap-4 mb-6">
+                {/* Period Toggle */}
+                <div className="flex justify-end">
+                    <div className="bg-corporate-card border border-corporate-border rounded-lg p-1 flex gap-1">
+                        {[
+                            { id: 'monthly', label: 'Monthly' },
+                            { id: 'yearly', label: 'Yearly' },
+                            { id: 'all_time', label: 'All Time' }
+                        ].map(p => (
+                            <button
+                                key={p.id}
+                                onClick={() => setOverviewPeriod(p.id)}
+                                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${overviewPeriod === p.id ? 'bg-corporate-primary text-white shadow-lg shadow-corporate-primary/20' : 'text-corporate-text-secondary hover:text-corporate-text-main'}`}
+                            >
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <KPICard
+                        title="Balance"
+                        amount={stats.balance}
+                        icon={Wallet}
+                        trend={12.5}
+                        isCurrency
+                    />
+                    <KPICard
+                        title="Credit"
+                        amount={stats.credit ? stats.credit[overviewPeriod] : stats.income}
+                        icon={DollarSign}
+                        trend={8.2}
+                        isPositive
+                        isCurrency
+                        valueColor="text-emerald-500"
+                    />
+                    <KPICard
+                        title="Debit"
+                        amount={Math.abs(stats.debit ? stats.debit[overviewPeriod] : stats.expense)}
+                        icon={Activity}
+                        trend={-2.4}
+                        isPositive={false}
+                        isCurrency
+                        valueColor="text-rose-500"
+                    />
+                    <KPICard
+                        title="Savings Rate"
+                        amount={`${stats.income ? Math.round(((stats.income - Math.abs(stats.expense)) / stats.income) * 100) : 0}%`}
+                        icon={Target}
+                        trend={1.2}
+                        isPositive
+                    />
+                </div>
             </div>
 
             {/* Main Content Grid: Bento Box Style */}
@@ -253,15 +279,15 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
     );
 };
 
-const KPICard = ({ title, amount, icon: Icon, trend, isPositive, isCurrency }) => (
+const KPICard = ({ title, amount, icon: Icon, trend, isPositive, isCurrency, valueColor }) => (
     <div className="bg-corporate-card border border-corporate-border rounded-lg p-5 hover:border-corporate-primary/30 transition-colors group">
         <div className="flex justify-between items-start mb-2">
             <span className="text-corporate-text-secondary text-xs font-semibold uppercase tracking-wider">{title}</span>
             <Icon size={16} className="text-corporate-text-muted group-hover:text-corporate-primary transition-colors" />
         </div>
         <div className="flex items-baseline gap-2 mt-1">
-            <h3 className="text-2xl font-bold text-corporate-text-main">
-                {isCurrency ? `₹${amount?.toLocaleString() || 0}` : amount}
+            <h3 className={`text-2xl font-bold ${valueColor || 'text-corporate-text-main'}`}>
+                {isCurrency ? `₹${(Math.abs(amount) || 0).toLocaleString()}` : amount}
             </h3>
         </div>
         <div className="mt-3 flex items-center gap-2">

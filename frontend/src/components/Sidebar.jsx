@@ -1,10 +1,15 @@
-import React from 'react';
-import { LayoutDashboard, Receipt, LineChart, TrendingUp, Settings, ChevronLeft, ChevronRight, PieChart, AlertCircle, Users, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutDashboard, Receipt, LineChart, TrendingUp, Settings, ChevronLeft, ChevronRight, PieChart, AlertCircle, Users, Calendar, Briefcase, Shield } from 'lucide-react';
+import SettingsModal from './SettingsModal';
 
 const Sidebar = ({ activeTab, setActiveTab, isOpen, toggle }) => {
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const menuItems = [
         { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
         { id: 'transactions', label: 'Transactions', icon: Receipt },
+        { id: 'assets', label: 'Assets', icon: Briefcase },
+        { id: 'wealth_impact', label: 'Wealth Impact', icon: TrendingUp },
+        { id: 'risk', label: 'Risk Profile', icon: Shield },
         { id: 'insights', label: 'Analytics', icon: PieChart },
         { id: 'forecast', label: 'Forecasts', icon: TrendingUp },
         { id: 'recurring_payments', label: 'Recurring Bills', icon: Calendar },
@@ -55,12 +60,18 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, toggle }) => {
                         <ChevronRight size={20} />
                     </button>
                 )}
-                <button className={`w-full flex items-center ${isOpen ? 'space-x-3 px-3' : 'justify-center'} py-2 text-corporate-text-secondary hover:text-white transition-colors text-sm font-medium`}>
+                <button
+                    onClick={() => setIsSettingsOpen(true)}
+                    className={`w-full flex items-center ${isOpen ? 'space-x-3 px-3' : 'justify-center'} py-2 text-corporate-text-secondary hover:text-white transition-colors text-sm font-medium`}
+                >
                     <Settings size={20} />
                     {isOpen && <span>Configuration</span>}
                 </button>
             </div>
+
+            <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
         </div>
+
     );
 };
 

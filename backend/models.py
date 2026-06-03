@@ -24,6 +24,12 @@ class User(Base):
     # Recurring Payments
     recurring_payments = relationship("RecurringPayment", back_populates="user")
     payment_notifications = relationship("PaymentNotification", back_populates="user")
+    
+    # Wealth Management
+    assets = relationship("Asset", back_populates="user")
+    portfolio_snapshots = relationship("PortfolioSnapshot", back_populates="user")
+    investment_goals = relationship("InvestmentGoal", back_populates="user")
+    risk_profile = relationship("RiskProfile", back_populates="user", uselist=False)
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -153,3 +159,47 @@ class PaymentNotification(Base):
 
     user = relationship("User", back_populates="payment_notifications")
     recurring_payment = relationship("RecurringPayment", back_populates="notifications")
+
+# ==================== WEALTH MANAGEMENT MODELS ====================
+
+class Asset(Base):
+    __tablename__ = "assets"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String)
+    symbol = Column(String, nullable=True) # Ticker symbol for API
+    type = Column(String) # Stock, MF, Gold, RealEstate, Crypto, FixedDeposit
+    quantity = Column(Float)
+    purchase_price = Column(Float)
+    current_price = Column(Float)
+    purchase_date = Column(Date, default=datetime.date.today)
+    metrics = Column(String, nullable=True) # JSON data
+    user = relationship("User", back_populates="assets")
+
+class PortfolioSnapshot(Base):
+    __tablename__ = "portfolio_snapshots"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    date = Column(Date, default=datetime.date.today)
+    total_value = Column(Float)
+    details = Column(String) # JSON string for asset allocation details
+    user = relationship("User", back_populates="portfolio_snapshots")
+
+class InvestmentGoal(Base):
+    __tablename__ = "investment_goals"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String)
+    target_amount = Column(Float)
+    current_amount = Column(Float, default=0.0)
+    deadline = Column(Date)
+    user = relationship("User", back_populates="investment_goals")
+
+class RiskProfile(Base):
+    __tablename__ = "risk_profiles"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    score = Column(Integer) # 1-10
+    profile_type = Column(String) # Conservative, Moderate, Aggressive
+    answers = Column(String) # JSON string of questionnaire answers
+    user = relationship("User", back_populates="risk_profile")
