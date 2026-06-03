@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Target, Edit2, Check, X, Plus } from 'lucide-react';
+import { Target, Edit2, Check, X, Plus, Save } from 'lucide-react';
 
 const Budget = () => {
     const [budgets, setBudgets] = useState({});
     const [spending, setSpending] = useState({});
     const [isEditing, setIsEditing] = useState(false);
+    const [editingCategory, setEditingCategory] = useState(null);
+    const [editAmount, setEditAmount] = useState('');
     const [newBudget, setNewBudget] = useState({ category: 'Food', amount: '' });
     const [loading, setLoading] = useState(true);
 
@@ -59,6 +61,32 @@ const Budget = () => {
             setIsEditing(false);
         } catch (err) {
             console.error("Failed to save budget", err);
+        }
+    };
+
+    const startEdit = (category, currentAmount) => {
+        setEditingCategory(category);
+        setEditAmount(currentAmount.toString());
+    };
+
+    const cancelEdit = () => {
+        setEditingCategory(null);
+        setEditAmount('');
+    };
+
+    const saveEdit = async () => {
+        if (!editAmount || parseFloat(editAmount) <= 0) return;
+
+        try {
+            await axios.post('/api/budget', {
+                category: editingCategory,
+                amount: parseFloat(editAmount)
+            });
+            await fetchData();
+            setEditingCategory(null);
+            setEditAmount('');
+        } catch (err) {
+            console.error("Failed to update budget", err);
         }
     };
 
@@ -126,14 +154,52 @@ const Budget = () => {
                     Object.entries(budgets).map(([category, limit]) => {
                         const spent = spending[category] || 0;
                         const percentage = Math.min((spent / limit) * 100, 100);
+                        const isEditingThis = editingCategory === category;
 
                         return (
                             <div key={category} className="space-y-1.5">
-                                <div className="flex justify-between text-xs font-medium">
+                                <div className="flex justify-between items-center text-xs font-medium">
                                     <span className="text-corporate-text-secondary">{category}</span>
-                                    <span className="text-corporate-text-muted">
-                                        ₹{spent.toFixed(0)} / <span className="text-corporate-text-main">₹{limit}</span>
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        {isEditingThis ? (
+                                            <>
+                                                <input
+                                                    type="number"
+                                                    value={editAmount}
+                                                    onChange={(e) => setEditAmount(e.target.value)}
+                                                    className="w-20 bg-corporate-bg border border-corporate-primary rounded px-2 py-1 text-xs text-corporate-text-main focus:outline-none"
+                                                    autoFocus
+                                                />
+                                                <button
+                                                    onClick={saveEdit}
+                                                    className="p-1 hover:bg-emerald-500/20 text-emerald-400 rounded transition-colors"
+                                                    title="Save"
+                                                >
+                                                    <Check size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={cancelEdit}
+                                                    className="p-1 hover:bg-rose-500/20 text-rose-400 rounded transition-colors"
+                                                    title="Cancel"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-corporate-text-muted">
+                                                    ₹{spent.toFixed(0)} / <span className="text-corporate-text-main">₹{limit}</span>
+                                                </span>
+                                                <button
+                                                    onClick={() => startEdit(category, limit)}
+                                                    className="p-1 hover:bg-corporate-primary/20 text-corporate-primary rounded transition-colors"
+                                                    title="Edit budget"
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="h-1.5 bg-corporate-bg rounded-full overflow-hidden">
                                     <div

@@ -8,6 +8,26 @@ from datetime import datetime
 import os
 import io
 
+def sanitize_for_pdf(text):
+    """Replace Unicode characters that can't be encoded in Latin-1 with ASCII equivalents."""
+    if not text:
+        return text
+    # Common replacements
+    replacements = {
+        '\u2014': '--',  # em dash
+        '\u2013': '-',   # en dash
+        '\u2018': "'",   # left single quote
+        '\u2019': "'",   # right single quote
+        '\u201c': '"',   # left double quote
+        '\u201d': '"',   # right double quote
+        '\u2026': '...',  # ellipsis
+        '\u2022': '*',   # bullet
+    }
+    for unicode_char, ascii_char in replacements.items():
+        text = text.replace(unicode_char, ascii_char)
+    # Remove any remaining non-Latin-1 characters
+    return text.encode('latin-1', errors='ignore').decode('latin-1')
+
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
@@ -139,7 +159,8 @@ def create_pdf_report(user_id, stats, health_score, anomalies, top_category, for
     pdf.ln(2)
     
     pdf.set_font('Arial', '', 10)
-    pdf.multi_cell(0, 6, advice_text)
+    safe_advice = sanitize_for_pdf(advice_text)
+    pdf.multi_cell(0, 6, safe_advice)
     pdf.ln(5)
 
     # --- Visuals Section (Page 1) ---
@@ -268,7 +289,14 @@ def create_statement_pdf(user_id, df, start_date, end_date):
     for _, row in df.iterrows():
         pdf.set_fill_color(248, 248, 255)
         
-        pdf.cell(col_widths[0], 8, str(row['date']), 0, 0, 'C', fill=fill)
+        # Handle date formatting safely
+        date_val = row['date']
+        if hasattr(date_val, 'strftime'):
+            date_str = date_val.strftime('%Y-%m-%d')
+        else:
+            date_str = str(date_val)
+            
+        pdf.cell(col_widths[0], 8, date_str, 0, 0, 'C', fill=fill)
         pdf.cell(col_widths[1], 8, str(row['category']), 0, 0, 'C', fill=fill)
         
         desc = str(row['description'])

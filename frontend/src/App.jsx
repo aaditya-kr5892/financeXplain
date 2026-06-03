@@ -11,6 +11,7 @@ import Preloader from './components/Preloader';
 import FraudList from './components/FraudList';
 import Modal from './components/Modal';
 import ManualEntry from './components/ManualEntry';
+import SplitBill from './components/SplitBill';
 
 // Initialize auth header to prevent race conditions with child components
 const savedUser = localStorage.getItem('fintech_user');
@@ -77,6 +78,8 @@ function App() {
                 return <Insights />;
             case 'forecast':
                 return <Forecast />;
+            case 'split_bill':
+                return <SplitBill />;
             case 'fraud': // New route
                 return <FraudList
                     setActiveTab={setActiveTab}

@@ -10,8 +10,9 @@ from typing import List, Optional
 from llm_service import generate_financial_advice
 import uuid
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from database import get_db, engine, Base
-from models import User, Transaction, Budget, ChatSession, ChatMessage
+from models import User, Transaction, Budget, ChatSession, ChatMessage, ExpenseGroup, GroupMember, SharedExpense, ExpenseSplit
 
 # Create Tables (if not exist)
 # Create Tables (if not exist)
@@ -130,19 +131,78 @@ def seed_anomaly(user: User = Depends(get_current_user), db: Session = Depends(g
 
 @app.get("/api/transactions")
 def get_transactions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    transactions = db.query(Transaction).filter(Transaction.user_id == user.id).all()
-    # Convert to dict list
-    return [
-        {
+    combined = []
+
+    # 1. Regular Transactions (Bank)
+    txns = db.query(Transaction).filter(Transaction.user_id == user.id).order_by(Transaction.date.desc()).limit(100).all()
+    for t in txns:
+        combined.append({
             "id": t.id,
             "date": t.date,
             "description": t.description,
             "amount": t.amount,
             "category": t.category,
-            "is_resolved": t.is_resolved
-        }
-        for t in transactions
-    ][-100:] # Return last 100
+            "is_resolved": t.is_resolved,
+            "type": "transaction",
+            "source": "bank"
+        })
+
+    # 2. Shared Expenses (I Paid Full Amount) - Display as Debit
+    my_expenses = db.query(SharedExpense).filter(SharedExpense.payer_id == user.id).all()
+    for exp in my_expenses:
+        combined.append({
+            "id": exp.id,
+            "date": exp.date,
+            "description": f"Paid for: {exp.description}",
+            "amount": -exp.amount, # Full Debit
+            "category": "SplitBill",
+            "is_resolved": True,
+            "type": "expense",
+            "source": "splitwise_payer"
+        })
+        
+        # 3. Repayments Received (Splits owed TO me that are PAID) - Display as Credit
+        # These are linked to the expense I paid.
+        for split in exp.splits:
+            if split.user_id != user.id and split.status == 'paid': # Don't count my own portion
+                payer_user = db.query(User).filter(User.id == split.user_id).first()
+                payer_name = payer_user.username if payer_user else "Member"
+                combined.append({
+                    "id": split.id,
+                    "date": exp.date, # Ideally repayment date, but using expense date for now or we need updated_at
+                    "description": f"Payment from {payer_name} ({exp.description})",
+                    "amount": split.amount_owed, # Credit
+                    "category": "SplitBill",
+                    "is_resolved": True,
+                    "type": "income",
+                    "source": "splitwise_repayment"
+                })
+
+    # 4. Expense Splits (Debts I Owe) - Display as Debit
+    # Only if I am NOT the payer
+    # User Request: Don't show in history until cleared (paid)
+    my_debts = db.query(ExpenseSplit).filter(ExpenseSplit.user_id == user.id).all()
+    for s in my_debts:
+        if s.status != 'paid':
+            continue
+            
+        parent = db.query(SharedExpense).filter(SharedExpense.id == s.expense_id).first()
+        if parent and parent.payer_id != user.id: 
+            combined.append({
+                "id": s.id,
+                "date": parent.date, # Or updated_at if available
+                "description": f"Split Paid: {parent.description}",
+                "amount": -s.amount_owed, # Debit (I paid)
+                "category": "SplitBill",
+                "is_resolved": True,
+                "type": "expense",
+                "source": "splitwise_debt",
+                "status": s.status
+            })
+            
+    # Sort by date desc
+    combined.sort(key=lambda x: x['date'], reverse=True)
+    return combined[:100]
 
 @app.get("/api/stats")
 def get_stats(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -421,8 +481,10 @@ def get_forecast(days: int = 30, user: User = Depends(get_current_user), db: Ses
             recent_values.append(predicted_flow) # Add prediction to history for next lag
             
             # Calculate dynamic uncertainty (widens over time)
-            # We can use a base error estimate (e.g., 5-10% of flow or fixed amount)
-            uncertainty = max(50, abs(predicted_flow) * 0.2) + (i * 5) 
+            # Increased uncertainty for better visualization
+            base_uncertainty = max(abs(simulated_balance) * 0.05, 5000)  # 5% of balance or minimum 5000
+            time_factor = (i * 100)  # Grows significantly over time
+            uncertainty = base_uncertainty + time_factor
             
             forecast_data.append({
                 "date": future_date.strftime('%Y-%m-%d'),
@@ -830,11 +892,30 @@ def generate_pdf_report(
                  X = df_features[features].fillna(0)
                  
                  anomalies_pred = models['anomaly'].predict(X)
-                 fraud_df = df[anomalies_pred == -1]
-                 fraud_df = fraud_df[fraud_df['amount'] < 0]
-                 fraud_df = fraud_df[fraud_df['amount'].abs() > 500]
+                 df['is_anomaly'] = anomalies_pred
                  
-                 fraud = fraud_df.to_dict(orient='records')
+                 # HYBRID OVERRIDE: Force certain patterns to be flagged as anomalies
+                 # 1. High Z-Score (statistical outliers)
+                 df.loc[df_features['amount_zscore'].abs() > 3, 'is_anomaly'] = -1
+                 # 2. Large Round Amounts (potential fraud pattern)
+                 df.loc[(df_features['amount'].abs() > 1000) & (df_features['is_round'] == 1), 'is_anomaly'] = -1
+                 
+                 # Filter to anomalies only
+                 fraud_df = df[df['is_anomaly'] == -1]
+                 fraud_df = fraud_df[fraud_df['amount'] < 0]
+                 fraud_df = fraud_df[fraud_df['amount'].abs() > 500] # Match frontend threshold
+                 
+                 print(f"Total anomalies detected: {len(fraud_df)}")
+                 
+                 # Ensure date is formatted before converting to dict
+                 if not fraud_df.empty:
+                     fraud_df_copy = fraud_df.copy()
+                     if 'date' in fraud_df_copy.columns:
+                         fraud_df_copy['date'] = fraud_df_copy['date'].astype(str)
+                     fraud = fraud_df_copy.to_dict(orient='records')
+                     print(f"Fraud alerts to include in report: {len(fraud)}")
+                 else:
+                     fraud = []
              except Exception as ex:
                  print(f"Report fraud check failed: {ex}")
                  fraud = []
@@ -888,6 +969,25 @@ def generate_statement_pdf(
         df = pd.read_sql(query.statement, db.bind)
         df['date'] = pd.to_datetime(df['date'])
         
+        # Add Splits to Statement
+        splits = db.query(ExpenseSplit).filter(ExpenseSplit.user_id == user.id).all()
+        split_rows = []
+        for s in splits:
+            parent = db.query(SharedExpense).filter(SharedExpense.id == s.expense_id).first()
+            if parent:
+                split_rows.append({
+                    "date": pd.to_datetime(parent.date),
+                    "amount": -s.amount_owed, # Debit
+                    "description": f"Split: {parent.description} ({s.status})",
+                    "category": "SplitBill",
+                    "id": s.id,
+                    "is_resolved": True if s.status == 'paid' else False
+                })
+        
+        if split_rows:
+            df_splits = pd.DataFrame(split_rows)
+            df = pd.concat([df, df_splits], ignore_index=True)
+        
         if df.empty:
             raise HTTPException(status_code=400, detail="No data")
             
@@ -907,8 +1007,10 @@ def generate_statement_pdf(
         return FileResponse(path, media_type='application/pdf', filename=f'Statement_{start_date or "All"}.pdf')
         
     except Exception as e:
+        import traceback
         print(f"Statement Gen error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
 
 @app.get("/api/report")
 def generate_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -1122,4 +1224,268 @@ async def upload_file(file: UploadFile = File(...), user: User = Depends(get_cur
             
     except Exception as e:
         print(f"Upload error: {e}")
+
+
+# --- Splitwise API ---
+from models import ExpenseGroup, GroupMember, SharedExpense, ExpenseSplit
+
+class GroupCreate(BaseModel):
+    name: str
+
+class MemberAdd(BaseModel):
+    username: str
+
+class ExpenseCreate(BaseModel):
+    description: str
+    amount: float
+    split_type: str = "equal" # Currently only equal supported
+
+@app.get("/api/groups")
+def get_user_groups(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Join GroupMember to find groups the user is in
+    # This might need a more optimized query but this works
+    memberships = db.query(GroupMember).filter(GroupMember.user_id == user.id).all()
+    group_ids = [m.group_id for m in memberships]
+    groups = db.query(ExpenseGroup).filter(ExpenseGroup.id.in_(group_ids)).all()
+    return [{"id": g.id, "name": g.name, "created_at": g.created_at} for g in groups]
+
+@app.post("/api/groups")
+def create_group(group: GroupCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Create Group
+    new_group = ExpenseGroup(
+        id=str(uuid.uuid4()),
+        name=group.name,
+        created_by_id=user.id
+    )
+    db.add(new_group)
+    db.commit()
+    
+    # Add Creator as Member
+    member = GroupMember(
+        id=str(uuid.uuid4()),
+        group_id=new_group.id,
+        user_id=user.id
+    )
+    db.add(member)
+    db.commit()
+    return {"id": new_group.id, "name": new_group.name}
+
+@app.get("/api/groups/{group_id}")
+def get_group_details(group_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Verify membership
+    membership = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id == user.id).first()
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+        
+    group = db.query(ExpenseGroup).filter(ExpenseGroup.id == group_id).first()
+    
+    # Get Members
+    members = db.query(User).join(GroupMember).filter(GroupMember.group_id == group_id).all()
+    member_list = [{"id": m.id, "username": m.username} for m in members]
+    
+    # Get Expenses
+    expenses = db.query(SharedExpense).filter(SharedExpense.group_id == group_id).order_by(SharedExpense.date.desc()).all()
+    expense_list = []
+    for exp in expenses:
+        payer = db.query(User).filter(User.id == exp.payer_id).first()
+        
+        # Get Splits
+        splits_data = []
+        for s in exp.splits:
+            s_user = db.query(User).filter(User.id == s.user_id).first()
+            splits_data.append({
+                "id": s.id,
+                "user_id": s.user_id,
+                "username": s_user.username if s_user else "Unknown",
+                "amount": s.amount_owed,
+                "status": s.status
+            })
+            
+        expense_list.append({
+            "id": exp.id,
+            "description": exp.description,
+            "amount": exp.amount,
+            "date": exp.date,
+            "payer": payer.username if payer else "Unknown",
+            "payer_id": exp.payer_id,
+            "splits": splits_data
+        })
+        
+    return {
+        "id": group.id,
+        "name": group.name,
+        "members": member_list,
+        "expenses": expense_list
+    }
+
+@app.post("/api/groups/{group_id}/members")
+def add_group_member(group_id: str, member: MemberAdd, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Verify creator/admin rights? For now any member can add
+    membership = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id == user.id).first()
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+        
+    new_member_user = db.query(User).filter(User.username == member.username).first()
+    if not new_member_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # Check if already member
+    exists = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id == new_member_user.id).first()
+    if exists:
+        raise HTTPException(status_code=400, detail="User already in group")
+        
+    new_membership = GroupMember(
+        id=str(uuid.uuid4()),
+        group_id=group_id,
+        user_id=new_member_user.id
+    )
+    db.add(new_membership)
+    db.commit()
+    return {"status": "success", "username": new_member_user.username}
+
+@app.post("/api/groups/{group_id}/expenses")
+def add_shared_expense(group_id: str, expense: ExpenseCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Verify membership
+    membership = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id == user.id).first()
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member")
+        
+    # Create Expense
+    new_expense = SharedExpense(
+        id=str(uuid.uuid4()),
+        group_id=group_id,
+        payer_id=user.id,
+        description=expense.description,
+        amount=expense.amount,
+        date=datetime.now().date()
+    )
+    db.add(new_expense)
+    db.commit()
+    
+    # Calculate Split (Equal)
+    members = db.query(GroupMember).filter(GroupMember.group_id == group_id).all()
+    if not members:
+         raise HTTPException(status_code=400, detail="No members to split with")
+         
+    split_amount = expense.amount / len(members)
+    
+    for m in members:
+        split = ExpenseSplit(
+            id=str(uuid.uuid4()),
+            expense_id=new_expense.id,
+            user_id=m.user_id,
+            amount_owed=split_amount
+        )
+        db.add(split)
+        
+    db.commit()
+    return {"status": "success", "expense_id": new_expense.id}
+
+    return {"status": "success", "expense_id": new_expense.id}
+
+class SplitAction(BaseModel):
+    action: str # pay, reject
+
+@app.post("/api/splits/{split_id}/action")
+def update_split_status(split_id: str, action: SplitAction, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Join with SharedExpense to check payer rights
+    split = db.query(ExpenseSplit).join(SharedExpense).filter(ExpenseSplit.id == split_id).first()
+    
+    if not split:
+        raise HTTPException(status_code=404, detail="Split not found")
+        
+    is_ower = split.user_id == user.id
+    is_payer = split.expense.payer_id == user.id
+    
+    if not (is_ower or is_payer):
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    if action.action == "pay":
+        # If Ower marks paid -> status 'paid' (simplified, typically needs confirmation)
+        # If Payer marks received -> status 'paid'
+        split.status = "paid"
+    elif action.action == "reject":
+        if is_ower:
+            split.status = "rejected"
+        else:
+             raise HTTPException(status_code=403, detail="Only the person who owes can reject")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action")
+        
+    db.commit()
+    return {"status": "success", "new_status": split.status}
+
+@app.get("/api/groups/{group_id}/balances")
+def get_group_balances(group_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Simple Balance Calculation
+    # Net Balance = (Total Paid by Me) - (Total I Owe in Splits)
+    
+    membership = db.query(GroupMember).filter(GroupMember.group_id == group_id, GroupMember.user_id == user.id).first()
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member")
+        
+    # Total I Paid (Only count expenses where at least one split is NOT rejected? Or simple view: I paid X)
+    # Ideally, if I pay 100, and someone rejects their 50, I am still out 100.
+    # But if they pay me back, my "net balance" improves.
+    # Wait, "paid" status on a split means "I have paid the payer".
+    # So if I owe 50, and I mark "paid", my debt decreases by 50.
+    
+    # 1. Total I "Fronted" (Paid to merchant)
+    total_fronted = db.query(func.sum(SharedExpense.amount)).filter(
+        SharedExpense.group_id == group_id, 
+        SharedExpense.payer_id == user.id
+    ).scalar() or 0.0
+    
+    # 2. Total I have been "Reimbursed" (Splits owed to me that are marked PAID)
+    reimbursed_to_me = db.query(func.sum(ExpenseSplit.amount_owed)).join(SharedExpense).filter(
+        SharedExpense.group_id == group_id,
+        SharedExpense.payer_id == user.id,
+        ExpenseSplit.status == 'paid'
+    ).scalar() or 0.0
+    
+    # 3. Total I Owe (Allocated to me)
+    # Exclude what I've already Paid back or Rejected
+    my_debt_total = db.query(func.sum(ExpenseSplit.amount_owed)).join(SharedExpense).filter(
+        SharedExpense.group_id == group_id,
+        ExpenseSplit.user_id == user.id
+    ).scalar() or 0.0
+    
+    my_paid_back = db.query(func.sum(ExpenseSplit.amount_owed)).join(SharedExpense).filter(
+        SharedExpense.group_id == group_id,
+        ExpenseSplit.user_id == user.id,
+        ExpenseSplit.status == 'paid'
+    ).scalar() or 0.0
+    
+    # Net Calculation:
+    # (+ Fronted) - (+ Reimbursed to me [cash in hand]) - (+ Debt allocated) + (+ Debt I paid back)
+    # Actually simpler:
+    # Outstanding Credit = (Splits owed to me that are PENDING)
+    # Outstanding Debt = (Splits I owe that are PENDING)
+    
+    # 1. Money I am owed (People haven't paid me yet)
+    # Get all splits for expenses I paid, where user != me, and status = pending
+    pending_owed_to_me = db.query(func.sum(ExpenseSplit.amount_owed)).join(SharedExpense).filter(
+        SharedExpense.group_id == group_id,
+        SharedExpense.payer_id == user.id,
+        ExpenseSplit.user_id != user.id, # Exclude my own split
+        ExpenseSplit.status == 'pending'
+    ).scalar() or 0.0
+    
+    # 2. Money I owe others
+    pending_i_owe = db.query(func.sum(ExpenseSplit.amount_owed)).join(SharedExpense).filter(
+        SharedExpense.group_id == group_id,
+        ExpenseSplit.user_id == user.id,
+        SharedExpense.payer_id != user.id, # Exclude if I paid execution
+        ExpenseSplit.status == 'pending'
+    ).scalar() or 0.0
+    
+    net_balance = pending_owed_to_me - pending_i_owe
+    
+    return {
+        "start_balance": 0, # Placeholder
+        "pending_owed_to_me": pending_owed_to_me,
+        "pending_i_owe": pending_i_owe,
+        "net_balance": net_balance,
+        "status": "You are owed" if net_balance > 0 else "You owe" if net_balance < 0 else "Settled"
+    }
 

@@ -13,6 +13,7 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
     const [loading, setLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
     const [period, setPeriod] = useState('monthly');
+    const [downloading, setDownloading] = useState({ analysis: false, statement: false });
 
     useEffect(() => {
         const fetchData = async () => {
@@ -45,21 +46,25 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
             query = `?start_date=${formatDate(start)}&end_date=${formatDate(end)}`;
         }
 
-        const endpoint = type === 'analysis' ? '/api/report/pdf' : '/api/statement/pdf';
-        const filename = type === 'analysis' ? 'Financial_Analysis.pdf' : 'Transaction_Statement.pdf';
-
         try {
+            setDownloading(prev => ({ ...prev, [type]: true }));
+
+            let endpoint = type === 'analysis' ? '/api/report/pdf' : '/api/report/statement';
+            let filename = type === 'analysis' ? 'Financial_Analysis.pdf' : 'Transaction_Statement.pdf';
+
             const res = await axios.get(`${endpoint}${query}`, { responseType: 'blob' });
-            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', filename);
+            link.download = filename;
             document.body.appendChild(link);
             link.click();
             link.remove();
         } catch (e) {
             console.error("Download failed", e);
             alert("Could not generate document. Please check data availability for this period.");
+        } finally {
+            setDownloading(prev => ({ ...prev, [type]: false }));
         }
     };
 
@@ -213,17 +218,31 @@ const Dashboard = ({ setActiveTab, refreshTrigger, fraudData, fraudLoading }) =>
                             <div className="grid grid-cols-2 gap-3">
                                 <button
                                     onClick={() => handleReportDownload('analysis')}
-                                    className="flex flex-col items-center justify-center p-3 rounded bg-corporate-primary/10 hover:bg-corporate-primary/20 border border-corporate-primary/20 transition-all group/btn"
+                                    disabled={downloading.analysis}
+                                    className="flex flex-col items-center justify-center p-3 rounded bg-corporate-primary/10 hover:bg-corporate-primary/20 border border-corporate-primary/20 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <ArrowDownRight size={16} className="text-corporate-primary mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
-                                    <span className="text-[10px] font-semibold text-corporate-primary">Analysis Report</span>
+                                    {downloading.analysis ? (
+                                        <div className="h-4 w-4 border-2 border-corporate-primary border-t-transparent rounded-full animate-spin mb-1"></div>
+                                    ) : (
+                                        <ArrowDownRight size={16} className="text-corporate-primary mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
+                                    )}
+                                    <span className="text-[10px] font-semibold text-corporate-primary">
+                                        {downloading.analysis ? "Generating..." : "Analysis Report"}
+                                    </span>
                                 </button>
                                 <button
                                     onClick={() => handleReportDownload('statement')}
-                                    className="flex flex-col items-center justify-center p-3 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all group/btn"
+                                    disabled={downloading.statement}
+                                    className="flex flex-col items-center justify-center p-3 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <Wallet size={16} className="text-emerald-500 mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
-                                    <span className="text-[10px] font-semibold text-emerald-500">Bank Statement</span>
+                                    {downloading.statement ? (
+                                        <div className="h-4 w-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-1"></div>
+                                    ) : (
+                                        <Wallet size={16} className="text-emerald-500 mb-1 group-hover/btn:translate-y-0.5 transition-transform" />
+                                    )}
+                                    <span className="text-[10px] font-semibold text-emerald-500">
+                                        {downloading.statement ? "Generating..." : "Bank Statement"}
+                                    </span>
                                 </button>
                             </div>
                         </div>
