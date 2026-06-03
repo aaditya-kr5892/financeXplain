@@ -94,7 +94,7 @@ function App() {
                     refetch={fetchFraudData}
                 />;
             case 'assets':
-                return <Assets />;
+                return <Assets setSidebarOpen={setIsSidebarOpen} />;
             case 'wealth_impact':
                 return <WealthImpact />;
             case 'risk':
@@ -109,7 +109,7 @@ function App() {
             <Preloader setLoading={setAppLoading} />
             <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} toggle={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-            <main className={`flex-1 ${isSidebarOpen ? 'ml-64' : 'ml-20'} p-8 overflow-y-auto h-screen relative scroll-smooth bg-corporate-bg transition-all duration-300 ease-in-out`}>
+            <main className={`flex-1 ${isSidebarOpen ? 'ml-56' : 'ml-20'} p-8 overflow-y-auto h-screen relative scroll-smooth bg-corporate-bg transition-all duration-300 ease-in-out`}>
                 {/* Modern Background Gradient - Subtle */}
                 <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0 overflow-hidden">
                     <div className="absolute top-[0%] right-[0%] w-[600px] h-[600px] bg-corporate-primary/5 rounded-full blur-[120px]" />

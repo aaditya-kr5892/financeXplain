@@ -8,7 +8,7 @@ import StockDetailModal from './StockDetailModal';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
-const Assets = () => {
+const Assets = ({ setSidebarOpen }) => {
     const [assets, setAssets] = useState([]);
     const [netWorthData, setNetWorthData] = useState({ total_net_worth: 0, breakdown: {} });
     const [loading, setLoading] = useState(true);
@@ -30,6 +30,12 @@ const Assets = () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    useEffect(() => {
+        if (setSidebarOpen) {
+            setSidebarOpen(!selectedAsset);
+        }
+    }, [selectedAsset]);
 
     const fetchData = async () => {
         try {

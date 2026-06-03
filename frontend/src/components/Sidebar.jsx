@@ -18,7 +18,7 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, toggle }) => {
     ];
 
     return (
-        <div className={`${isOpen ? 'w-64' : 'w-20'} bg-corporate-card border-r border-corporate-border flex flex-col h-screen fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out`}>
+        <div className={`${isOpen ? 'w-56' : 'w-20'} bg-corporate-card border-r border-corporate-border flex flex-col h-screen fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out`}>
             {/* Logo Area */}
             <div className="h-16 flex items-center justify-between px-4 border-b border-corporate-border">
                 <div className={`flex items-center gap-2 text-corporate-text-main font-bold text-xl tracking-tight ${!isOpen && 'justify-center w-full'}`}>

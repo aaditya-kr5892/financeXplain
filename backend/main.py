@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Header, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
+import numpy as np
 import pickle
 import os
 import hashlib
@@ -2103,6 +2104,34 @@ def search_stocks(q: str):
         print(f"Search error: {e}")
         return []
 
+def calculate_technical_indicators(df):
+    if df.empty: return df
+    
+    # Avoid warning on slice copy
+    df = df.copy()
+
+    # 1. SMA (20)
+    df['SMA_20'] = df['Close'].rolling(window=20).mean()
+    
+    # 2. EMA (20)
+    df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
+    
+    # 3. RSI (14)
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # 4. MACD
+    exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+    exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = exp1 - exp2
+    df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    
+    return df
+
 @app.get("/api/stocks/{symbol}/history")
 def get_stock_history(symbol: str, period: str = "1mo"):
     try:
@@ -2112,12 +2141,31 @@ def get_stock_history(symbol: str, period: str = "1mo"):
         elif period == "5d": interval = "15m"
         
         hist = ticker.history(period=period, interval=interval)
+        
+        # Calculate Indicators
+        hist = calculate_technical_indicators(hist)
+        
         data = []
         for index, row in hist.iterrows():
-            data.append({
+            record = {
                 "date": index.isoformat(),
-                "price": row['Close']
-            })
+                "price": row['Close'],
+                "open": row['Open'],
+                "high": row['High'],
+                "low": row['Low'],
+                "close": row['Close'],
+                "sma_20": row.get('SMA_20'),
+                "ema_20": row.get('EMA_20'),
+                "rsi": row.get('RSI'),
+                "macd": row.get('MACD'),
+                "signal": row.get('Signal_Line')
+            }
+            # Handle NaN for JSON serialization
+            for k, v in record.items():
+                if isinstance(v, float) and (np.isnan(v) or np.isinf(v)):
+                    record[k] = None
+                    
+            data.append(record)
         return data
     except Exception as e:
         print(f"History error: {e}")
