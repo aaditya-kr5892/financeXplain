@@ -23,3 +23,7 @@ coverage/
 
 # Artifacts
 antigravity/
+
+node_modules/
+frontend/node_modules/
+backend/__pycache__/
