@@ -6,7 +6,7 @@ load_dotenv()
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY", "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"), # Fallback to hardcoded if env not set
+    api_key=os.getenv("OPENROUTER_API_KEY"), # Fallback to hardcoded if env not set
     default_headers={
         "HTTP-Referer": "http://localhost:5173",
         "X-Title": "Fintech Dashboard Hackathon",
