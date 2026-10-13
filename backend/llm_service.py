@@ -6,7 +6,7 @@ load_dotenv()
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY"), # Fallback to hardcoded if env not set
+    api_key=os.getenv("OPENROUTER_API_KEY") or "dummy-key",
     default_headers={
         "HTTP-Referer": "http://localhost:5173",
         "X-Title": "Fintech Dashboard Hackathon",
@@ -62,11 +62,12 @@ def generate_financial_advice(user_question: str, financial_data: str = "", hist
 
 
     models_to_try = [
-        # "liquid/lfm-2.5-1.2b-thinking:free",
-        # "liquid/lfm-2.5-1.2b-instruct:free",
-        # "xiaomi/mimo-v2-flash:free",
-        # "google/gemini-2.0-flash-exp:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
+        "openrouter/free",
+        "google/gemini-2.0-flash-exp:free",
+        "meta-llama/llama-3.2-3b-instruct:free",
+        "meta-llama/llama-3.1-8b-instruct:free",
+        "mistralai/mistral-7b-instruct:free",
+        "qwen/qwen-2.5-7b-instruct:free",
     ]
 
     # 1. Try API Models
@@ -135,8 +136,11 @@ def analyze_purchase_confidence(amount: float, category: str, description: str, 
     """
     
     models_to_try = [
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "google/gemini-2.0-flash-exp:free"
+        "openrouter/free",
+        "google/gemini-2.0-flash-exp:free",
+        "meta-llama/llama-3.2-3b-instruct:free",
+        "meta-llama/llama-3.1-8b-instruct:free",
+        "qwen/qwen-2.5-7b-instruct:free",
     ]
     
     for model in models_to_try:
